@@ -1,0 +1,89 @@
+{
+    "required_template": {
+      "acl": {
+        "owners": [],
+        "viewers": []
+      },
+      "legal": {
+        "legaltags": [],
+        "otherRelevantDataCountries": []
+      }
+    },
+    "mapping": [
+      {
+        "data_file": "tno_refAliasNameType.1.0.0_1.csv",
+        "template_file": "template_refAliasNameType.1.0.0.json",
+        "output_file_name": "refAliasNameType.json"
+      },
+      {
+        "data_file": "tno_refCoordinateReferenceSystem.1.0.0_1.csv",
+        "template_file": "template_refCoordinateReferenceSystem.1.0.0.json",
+        "output_file_name": "refCoordinateReferenceSystem.json"
+      },
+      {
+        "data_file": "tno_refGeoPoliticalEntityType.1.0.0_1.csv",
+        "template_file": "template_refGeoPoliticalEntityType.1.0.0.json",
+        "output_file_name": "refGeoPoliticalEntityType.json"
+      },
+      {
+        "data_file": "tno_refVerticalMeasurementPath.1.0.0_1.csv",
+        "template_file": "template_refVerticalMeasurementPath.1.0.0.json",
+        "output_file_name": "refVerticalMeasurementPath.json"
+      },
+      {
+        "data_file": "tno_refDrillingReasonType.1.0.0_1.csv",
+        "template_file": "template_refDrillingReasonType.1.0.0.json",
+        "output_file_name": "refDrillingReasonType.json"
+      },
+      {
+        "data_file": "tno_refMaterialType.1.0.0_1.csv",
+        "template_file": "template_refMaterialType.1.0.0.json",
+        "output_file_name": "refMaterialType.json"
+      },
+      {
+        "data_file": "tno_refWellboreTrajectoryType.1.0.0_1.csv",
+        "template_file": "template_refWellboreTrajectoryType.1.0.0.json",
+        "output_file_name": "refWellboreTrajectoryType.json"
+      },
+      {
+        "data_file": "tno_refFacilityEventType.1.0.0_1.csv",
+        "template_file": "template_refFacilityEventType.1.0.0.json",
+        "output_file_name": "refFacilityEventType.json"
+      },
+      {
+        "data_file": "tno_refOperatingEnvironment.1.0.0_1.csv",
+        "template_file": "template_refOperatingEnvironment.1.0.0.json",
+        "output_file_name": "refOperatingEnvironment.json"
+      },
+      {
+        "data_file": "tno_refFacilityStateType.1.0.0_1.csv",
+        "template_file": "template_refFacilityStateType.1.0.0.json",
+        "output_file_name": "refFacilityStateType.json"
+      },
+      {
+        "data_file": "tno_refFacilityType.1.0.0_1.csv",
+        "template_file": "template_refFacilityType.1.0.0.json",
+        "output_file_name": "refFacilityType.json"
+      },
+      {
+        "data_file": "tno_refResourceSecurityClassification.1.0.0_1.csv",
+        "template_file": "template_refResourceSecurityClassification.1.0.0.json",
+        "output_file_name": "refResourceSecurityClassification.json"
+      },
+      {
+        "data_file": "tno_refSchemaFormatType.1.0.0_1.csv",
+        "template_file": "template_refSchemaFormatType.1.0.0.json",
+        "output_file_name": "refSchemaFormatType.json"
+      },
+      {
+        "data_file": "tno_refUnitOfMeasure.1.0.0_1.csv",
+        "template_file": "template_refUnitOfMeasure.1.0.0.json",
+        "output_file_name": "refUnitOfMeasure.json"
+      },
+      {
+        "data_file": "tno_refVerticalMeasurementType.1.0.0_1.csv",
+        "template_file": "template_refVerticalMeasurementType.1.0.0.json",
+        "output_file_name": "refVerticalMeasurementType.json"
+      }
+    ]
+  }

@@ -1,0 +1,4 @@
+dataload.ini
+*.log
+*.json
+manifests/

@@ -1,0 +1,74 @@
+{
+    "required_template": {
+      "acl": {
+        "owners": [],
+        "viewers": []
+      },
+      "legal": {
+        "legaltags": [],
+        "otherRelevantDataCountries": []
+      },
+      "data": {
+        "NameAliases": [],
+        "GeoContexts": [],
+        "$SpatialLocation": {
+          "$AsIngestedCoordinates": {
+            "persistableReferenceCrs": "",
+            "features": [
+              {
+                "properties": {}
+              }
+            ]
+          },
+          "$Wgs84Coordinates": {
+            "features": [
+              {
+                "properties": {}
+              }
+            ]
+          }
+        },
+        "$ProjectedBottomHoleLocation": {
+          "$Wgs84Coordinates": {
+            "$features": [
+              {
+                "properties": {}
+              }
+            ]
+          },
+          "$AsIngestedCoordinates": {
+            "persistableReferenceCrs": "",
+            "features": [
+              {
+                "properties": {}
+              }
+            ]
+          }
+        },
+        "$GeographicBottomHoleLocation": {
+          "$Wgs84Coordinates": {
+            "$features": [
+              {
+                "properties": {}
+              }
+            ]
+          },
+          "$AsIngestedCoordinates": {
+            "persistableReferenceCrs": "",
+            "features": [
+              {
+                "properties": {}
+              }
+            ]
+          }
+        }
+      }
+    },
+    "mapping": [
+      {
+        "data_file": "wellbore_tno_csv_0901_2021.csv",
+        "template_file": "template_maWellbore.1.0.0.json",
+        "output_file_name": "maWellbore.json"
+      }
+    ]
+  }

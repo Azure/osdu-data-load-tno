@@ -1,0 +1,29 @@
+{
+    "required_template": {
+      "acl": {
+        "owners": [],
+        "viewers": []
+      },
+      "legal": {
+        "legaltags": [],
+        "otherRelevantDataCountries": []
+      }
+    },
+    "mapping": [
+      {
+        "data_file": "TNO_maField.1.0.0_1.csv",
+        "template_file": "template_maField.1.0.0.json",
+        "output_file_name": "maField.json"
+      },
+      {
+        "data_file": "TNO_maGeoPoliticalEntity.1.0.0_1.csv",
+        "template_file": "template_maGeoPoliticalEntity.1.0.0.json",
+        "output_file_name": "maGeoPoliticalEntity.json"
+      },
+      {
+        "data_file": "TNO_maOrganisation.1.0.0_1.csv",
+        "template_file": "template_maOrganisation.1.0.0.json",
+        "output_file_name": "maOrganisation.json"
+      }
+    ]
+  }
