@@ -48,7 +48,8 @@
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
     "workspaceFolder": "/workspace",
     "containerEnv": {
-      "DOMAIN": "contoso.com"
+      "DOMAIN": "contoso.com",
+      "ACL": "default"
     },
     "runArgs": [
       "--env-file",
