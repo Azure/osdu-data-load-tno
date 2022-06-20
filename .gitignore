@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+open-test-data
+open-test-data*
+.envrc*
+__pycache__
+*.egg-info
+build
+dist
+
 # User-specific files
 *.rsuser
 *.suo

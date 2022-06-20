@@ -1,7 +1,0 @@
-open-test-data
-open-test-data*
-.envrc*
-__pycache__
-*.egg-info
-build
-dist
