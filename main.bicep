@@ -3,6 +3,8 @@
 @description('UTC timestamp used to create distinct deployment scripts for each deployment')
 param utcValue string = utcNow()
 
+@description('Location of Storage Account')
+param location string = resourceGroup().location
 
 var shareName = 'open-test-data'
 var storageAccountName = uniqueString(resourceGroup().id, deployment().name)
@@ -10,7 +12,7 @@ var storageAccountName = uniqueString(resourceGroup().id, deployment().name)
 
 resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   name: storageAccountName
-  location: resourceGroup().location
+  location: location
   sku: {
     name: 'Standard_LRS'
   }
@@ -27,7 +29,7 @@ resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
 
 resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   name: 'load-blob-${utcValue}'
-  location: resourceGroup().location
+  location: location
   kind: 'AzureCLI'
   properties: {
     azCliVersion: '2.37.0'

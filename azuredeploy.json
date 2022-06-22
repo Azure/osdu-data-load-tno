@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "2963470941266808619"
+      "templateHash": "5938947809023865965"
     }
   },
   "parameters": {
@@ -14,6 +14,13 @@
       "defaultValue": "[utcNow()]",
       "metadata": {
         "description": "UTC timestamp used to create distinct deployment scripts for each deployment"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location of Storage Account"
       }
     }
   },
@@ -42,7 +49,7 @@
       "type": "Microsoft.Storage/storageAccounts",
       "apiVersion": "2021-04-01",
       "name": "[variables('storageAccountName')]",
-      "location": "[resourceGroup().location]",
+      "location": "[parameters('location')]",
       "sku": {
         "name": "Standard_LRS"
       },
@@ -52,7 +59,7 @@
       "type": "Microsoft.Resources/deploymentScripts",
       "apiVersion": "2020-10-01",
       "name": "[format('load-blob-{0}', parameters('utcValue'))]",
-      "location": "[resourceGroup().location]",
+      "location": "[parameters('location')]",
       "kind": "AzureCLI",
       "properties": {
         "azCliVersion": "2.37.0",
