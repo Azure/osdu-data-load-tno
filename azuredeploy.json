@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "7701207438931325217"
+      "templateHash": "2963470941266808619"
     }
   },
   "parameters": {
@@ -72,7 +72,7 @@
             "value": "[variables('shareName')]"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n      console.log('Downloading Data')\n      FILE_NAME=open-test-data.gz\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n      console.log('Uploading data')\n      az storage file upload -s $FILE_NAME --source $FILE_NAME\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n      az storage file upload -s $FILE_NAME --source $FILE_NAME\n    "
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
