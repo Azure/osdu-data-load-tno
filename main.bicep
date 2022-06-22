@@ -54,8 +54,35 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       set -e
       FILE_NAME=open-test-data.gz
 
+      echo -e "Retrieving data from OSDU..."
       wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
-      az storage file upload -s $FILE_NAME --source $FILE_NAME
+
+      echo -e "Creating Directories..."
+      mkdir -p /tmp/open-test-data/documents
+      mkdir -p /tmp/open-test-data/datasets/markers
+      mkdir -p /tmp/open-test-data/datasets/trajectories
+      mkdir -p /tmp/open-test-data/datasets/well-logs
+      mkdir -p /tmp/open-test-data/schema
+      mkdir -p /tmp/open-test-data/schema
+      mkdir -p /tmp/open-test-data/templates
+      mkdir -p /tmp/open-test-data/TNO/contrib
+      mkdir -p /tmp/open-test-data/TNO/provided
+
+      echo -e "Extracting Files..."
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO
+
+      echo -e "Uploading Files..."
+      az storage file upload-batch \
+        --destination $AZURE_STORAGE_SHARE \
+        --source /tmp/open-test-data \
+        --pattern "open-test-data/**"
     '''
   }
 }
