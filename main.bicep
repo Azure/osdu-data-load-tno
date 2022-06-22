@@ -62,7 +62,7 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
 
       echo -e "Copying Documents"
       az storage file upload-batch \
-        --account-name $AZURE_STORAGE_NAME \
+        --account-name $AZURE_STORAGE_ACCOUNT \
         --account-key $AZURE_STORAGE_KEY \
         --destination $AZURE_STORAGE_SHARE \
         --source /tmp/open-test-data \

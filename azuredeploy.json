@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "7324148251350373090"
+      "templateHash": "7371986919837884793"
     }
   },
   "parameters": {
@@ -79,7 +79,7 @@
             "value": "[variables('shareName')]"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n\n      echo -e \"Retrieving data from OSDU...\"\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n\n      mkdir -p /tmp/open-test-data/documents\n      tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs\n\n      echo -e \"Copying Documents\"\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_NAME \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source /tmp/open-test-data \\\n        --pattern \"open-test-data/**\"\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n\n      echo -e \"Retrieving data from OSDU...\"\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n\n      mkdir -p /tmp/open-test-data/documents\n      tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs\n\n      echo -e \"Copying Documents\"\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source /tmp/open-test-data \\\n        --pattern \"open-test-data/**\"\n    "
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
