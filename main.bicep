@@ -33,7 +33,7 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
   kind: 'AzureCLI'
   properties: {
     azCliVersion: '2.37.0'
-    timeout: 'PT10M'
+    timeout: 'PT20M'
     retentionInterval: 'PT1H'
     environmentVariables: [
       {
@@ -57,8 +57,14 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       echo -e "Retrieving data from OSDU..."
       wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
 
-      echo -e "Creating Directories..."
+      echo -e "Copying Documents"
       mkdir -p /tmp/open-test-data/documents
+      tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs
+      az storage file upload-batch \
+        --destination $AZURE_STORAGE_SHARE \
+        --source /tmp/open-test-data \
+        --pattern "open-test-data/documents/**"
+
       mkdir -p /tmp/open-test-data/datasets/markers
       mkdir -p /tmp/open-test-data/datasets/trajectories
       mkdir -p /tmp/open-test-data/datasets/well-logs
@@ -69,7 +75,7 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       mkdir -p /tmp/open-test-data/TNO/provided
 
       echo -e "Extracting Files..."
-      tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs
+
       tar -xzvf $FILE_NAME -C /tmp/open-test-data/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers
       tar -xzvf $FILE_NAME -C /tmp/open-test-data/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories
       tar -xzvf $FILE_NAME -C /tmp/open-test-data/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs
