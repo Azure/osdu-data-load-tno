@@ -50,10 +50,9 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
     scriptContent: '''
       #!/bin/bash
       set -e
-      console.log('Downloading Data')
       FILE_NAME=open-test-data.gz
+
       wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
-      console.log('Uploading data')
       az storage file upload -s $FILE_NAME --source $FILE_NAME
     '''
   }
