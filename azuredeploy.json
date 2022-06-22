@@ -4,62 +4,45 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.6.11.53198",
-      "templateHash": "1318858973479702593"
+      "version": "0.7.4.23292",
+      "templateHash": "7701207438931325217"
     }
   },
   "parameters": {
-    "location": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Azure region where resources should be deployed"
-      }
-    },
-    "storageAccountName": {
-      "type": "string",
-      "defaultValue": "[uniqueString(resourceGroup().id, deployment().name)]",
-      "metadata": {
-        "description": "Desired name of the storage account"
-      }
-    },
     "utcValue": {
       "type": "string",
       "defaultValue": "[utcNow()]",
       "metadata": {
         "description": "UTC timestamp used to create distinct deployment scripts for each deployment"
       }
-    },
-    "containerName": {
-      "type": "string",
-      "defaultValue": "open-test-data",
-      "metadata": {
-        "description": "Name of the blob container"
-      }
     }
+  },
+  "variables": {
+    "shareName": "open-test-data",
+    "storageAccountName": "[uniqueString(resourceGroup().id, deployment().name)]"
   },
   "resources": [
     {
-      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
       "apiVersion": "2021-04-01",
-      "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('containerName'))]",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('shareName'))]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageAccountName'), 'default')]"
       ]
     },
     {
-      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
       "apiVersion": "2021-04-01",
-      "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
+      "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts",
       "apiVersion": "2021-04-01",
-      "name": "[parameters('storageAccountName')]",
-      "location": "[parameters('location')]",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
       "sku": {
         "name": "Standard_LRS"
       },
@@ -69,37 +52,37 @@
       "type": "Microsoft.Resources/deploymentScripts",
       "apiVersion": "2020-10-01",
       "name": "[format('load-blob-{0}', parameters('utcValue'))]",
-      "location": "[parameters('location')]",
+      "location": "[resourceGroup().location]",
       "kind": "AzureCLI",
       "properties": {
-        "azCliVersion": "2.26.1",
+        "azCliVersion": "2.37.0",
         "timeout": "PT10M",
         "retentionInterval": "PT1H",
         "environmentVariables": [
           {
             "name": "AZURE_STORAGE_ACCOUNT",
-            "value": "[parameters('storageAccountName')]"
+            "value": "[variables('storageAccountName')]"
           },
           {
             "name": "AZURE_STORAGE_KEY",
-            "secureValue": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-04-01').keys[0].value]"
+            "secureValue": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value]"
           },
           {
-            "name": "AZURE_STORAGE_CONTAINER",
-            "value": "[parameters('containerName')]"
+            "name": "AZURE_STORAGE_SHARE",
+            "value": "[variables('shareName')]"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n\n      FILE_NAME=open-test-data.gz\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n      az storage blob upload -f $FILE_NAME -c $AZURE_STORAGE_CONTAINER -n $FILE_NAME\n\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      console.log('Downloading Data')\n      FILE_NAME=open-test-data.gz\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n      console.log('Uploading data')\n      az storage file upload -s $FILE_NAME --source $FILE_NAME\n    "
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     }
   ],
   "outputs": {
     "storageAccountName": {
       "type": "string",
-      "value": "[parameters('storageAccountName')]"
+      "value": "[variables('storageAccountName')]"
     }
   }
 }

@@ -3,10 +3,8 @@
 @description('UTC timestamp used to create distinct deployment scripts for each deployment')
 param utcValue string = utcNow()
 
-@description('Name of the blob container')
-var containerName = 'open-test-data'
 
-@description('Desired name of the storage account')
+var shareName = 'open-test-data'
 var storageAccountName = uniqueString(resourceGroup().id, deployment().name)
 
 
@@ -18,11 +16,11 @@ resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   }
   kind: 'StorageV2'
 
-  resource blobService 'blobServices' = {
+  resource fileService 'fileServices' = {
     name: 'default'
 
-    resource container 'containers' = {
-      name: containerName
+    resource share 'shares' = {
+      name: shareName
     }
   }
 }
@@ -32,7 +30,7 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
   location: resourceGroup().location
   kind: 'AzureCLI'
   properties: {
-    azCliVersion: '2.26.1'
+    azCliVersion: '2.37.0'
     timeout: 'PT10M'
     retentionInterval: 'PT1H'
     environmentVariables: [
@@ -45,18 +43,18 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
         secureValue: storage.listKeys().keys[0].value
       }
       {
-        name: 'AZURE_STORAGE_CONTAINER'
-        value: containerName
+        name: 'AZURE_STORAGE_SHARE'
+        value: shareName
       }
     ]
     scriptContent: '''
       #!/bin/bash
       set -e
-
+      console.log('Downloading Data')
       FILE_NAME=open-test-data.gz
       wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
-      az storage blob upload -f $FILE_NAME -c $AZURE_STORAGE_CONTAINER -n $FILE_NAME
-
+      console.log('Uploading data')
+      az storage file upload -s $FILE_NAME --source $FILE_NAME
     '''
   }
 }
