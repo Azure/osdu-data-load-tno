@@ -57,13 +57,16 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       echo -e "Retrieving data from OSDU..."
       wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
 
-      echo -e "Copying Documents"
       mkdir -p /tmp/open-test-data/documents
       tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs
+
+      echo -e "Copying Documents"
       az storage file upload-batch \
+        --account-name $AZURE_STORAGE_NAME \
+        --account-key $AZURE_STORAGE_KEY \
         --destination $AZURE_STORAGE_SHARE \
         --source /tmp/open-test-data \
-        --pattern "open-test-data/documents/**"
+        --pattern "open-test-data/**"
     '''
   }
 }
