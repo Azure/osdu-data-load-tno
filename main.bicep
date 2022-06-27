@@ -33,7 +33,7 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
   kind: 'AzureCLI'
   properties: {
     azCliVersion: '2.37.0'
-    timeout: 'PT20M'
+    timeout: 'PT30M'
     retentionInterval: 'PT1H'
     environmentVariables: [
       {
@@ -46,16 +46,14 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       }
       {
         name: 'AZURE_STORAGE_SHARE'
-        value: shareName
+        value: 'open-test-data'
       }
     ]
     scriptContent: '''
       #!/bin/bash
       set -e
       FILE_NAME=open-test-data.gz
-      AZURE_STORAGE_SHARE="open-test-data"
       SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-
       DATA_DIR="${SCRIPT_DIR}/${AZURE_STORAGE_SHARE}"
 
       echo -e "Retrieving data from OSDU..."
@@ -66,10 +64,27 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       mkdir -p $DATA_DIR/datasets/markers
       mkdir -p $DATA_DIR/datasets/trajectories
       mkdir -p $DATA_DIR/datasets/well-logs
+
       tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs
       tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers
       tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories
       tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs
+
+
+      # Extract schemas
+      mkdir -p $DATA_DIR/schemas
+      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema
+
+
+      # Extract Manifests
+      mkdir -p $DATA_DIR/templates
+      mkdir -p $DATA_DIR/TNO/contrib
+      mkdir -p $DATA_DIR/TNO/provided
+      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema
+      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates
+      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO
+      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO
+
 
       # Upload to Azure Storage
       az storage file upload-batch \
@@ -77,10 +92,9 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
         --account-key $AZURE_STORAGE_KEY \
         --destination $AZURE_STORAGE_SHARE \
         --source $DATA_DIR
-
     '''
   }
 }
 
-
+output scriptLogs string = reference('${blobDeploymentScript.id}/logs/default', blobDeploymentScript.apiVersion, 'Full').properties.log
 output storageAccountName string = storageAccountName

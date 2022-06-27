@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "17185658321068385346"
+      "templateHash": "9442743049840907006"
     }
   },
   "parameters": {
@@ -63,7 +63,7 @@
       "kind": "AzureCLI",
       "properties": {
         "azCliVersion": "2.37.0",
-        "timeout": "PT20M",
+        "timeout": "PT30M",
         "retentionInterval": "PT1H",
         "environmentVariables": [
           {
@@ -76,10 +76,10 @@
           },
           {
             "name": "AZURE_STORAGE_SHARE",
-            "value": "[variables('shareName')]"
+            "value": "open-test-data"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n      AZURE_STORAGE_SHARE=\"open-test-data\"\n      SCRIPT_DIR=$( cd -- \"$( dirname -- \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n\n      DATA_DIR=\"${SCRIPT_DIR}/${AZURE_STORAGE_SHARE}\"\n\n      echo -e \"Retrieving data from OSDU...\"\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n\n      # Extract datasets\n      mkdir -p $DATA_DIR/datasets/documents\n      mkdir -p $DATA_DIR/datasets/markers\n      mkdir -p $DATA_DIR/datasets/trajectories\n      mkdir -p $DATA_DIR/datasets/well-logs\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs\n\n      # Upload to Azure Storage\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source $DATA_DIR\n\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n      SCRIPT_DIR=$( cd -- \"$( dirname -- \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n      DATA_DIR=\"${SCRIPT_DIR}/${AZURE_STORAGE_SHARE}\"\n\n      echo -e \"Retrieving data from OSDU...\"\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n\n      # Extract datasets\n      mkdir -p $DATA_DIR/datasets/documents\n      mkdir -p $DATA_DIR/datasets/markers\n      mkdir -p $DATA_DIR/datasets/trajectories\n      mkdir -p $DATA_DIR/datasets/well-logs\n\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs\n\n\n      # Extract schemas\n      mkdir -p $DATA_DIR/schemas\n      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema\n\n\n      # Extract Manifests\n      mkdir -p $DATA_DIR/templates\n      mkdir -p $DATA_DIR/TNO/contrib\n      mkdir -p $DATA_DIR/TNO/provided\n      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema\n      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates\n      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO\n      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO\n\n\n      # Upload to Azure Storage\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source $DATA_DIR\n    "
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
@@ -87,6 +87,10 @@
     }
   ],
   "outputs": {
+    "scriptLogs": {
+      "type": "string",
+      "value": "[reference(format('{0}/logs/default', resourceId('Microsoft.Resources/deploymentScripts', format('load-blob-{0}', parameters('utcValue')))), '2020-10-01', 'Full').properties.log]"
+    },
     "storageAccountName": {
       "type": "string",
       "value": "[variables('storageAccountName')]"
