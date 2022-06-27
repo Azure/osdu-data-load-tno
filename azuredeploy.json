@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "7371986919837884793"
+      "templateHash": "15806019057445483539"
     }
   },
   "parameters": {
@@ -79,7 +79,7 @@
             "value": "[variables('shareName')]"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n\n      echo -e \"Retrieving data from OSDU...\"\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n\n      mkdir -p /tmp/open-test-data/documents\n      tar -xzvf $FILE_NAME -C /tmp/open-test-data/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs\n\n      echo -e \"Copying Documents\"\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source /tmp/open-test-data \\\n        --pattern \"open-test-data/**\"\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n      AZURE_STORAGE_SHARE=\"open-test-data\"\n      PARENT_DIR=\"/tmp/${AZURE_STORAGE_SHARE}\"\n\n      #echo -e \"Retrieving data from OSDU...\"\n      #wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz\n\n      # Extract datasets\n      mkdir -p $PARENT_DIR/datasets/documents\n      mkdir -p $PARENT_DIR/datasets/markers\n      mkdir -p $PARENT_DIR/datasets/trajectories\n      mkdir -p $PARENT_DIR/datasets/well-logs\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs\n\n      # Extract schemas\n      mkdir -p $PARENT_DIR/schemas\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema\n\n      # Extract Manifests\n      mkdir -p $PARENT_DIR/templates\n      mkdir -p $PARENT_DIR/TNO/contrib\n      mkdir -p $PARENT_DIR/TNO/provided\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO\n      tar -xzvf $FILE_NAME -C $PARENT_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO\n\n      # Upload to Azure Storage\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source $PARENT_DIR\n\n    "
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
