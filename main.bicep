@@ -56,8 +56,8 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
       AZURE_STORAGE_SHARE="open-test-data"
       PARENT_DIR="/tmp/${AZURE_STORAGE_SHARE}"
 
-      #echo -e "Retrieving data from OSDU..."
-      #wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
+      echo -e "Retrieving data from OSDU..."
+      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz
 
       # Extract datasets
       mkdir -p $PARENT_DIR/datasets/documents
