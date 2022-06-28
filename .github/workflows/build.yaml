@@ -1,13 +1,22 @@
 name: 'Build'
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      -  uses: actions/checkout@v2
       - name: Bicep Build
-        uses: aliencube/bicep-build-actions@v0.3
+        uses: Azure/bicep-build-action@v1.0.0
         with:
-            files: azuredeploy.bicep
+          bicepFilePath: main.bicep
+          outputFilePath: azuredeploy.json
+      - name: Git CheckIn
+        uses: EndBug/add-and-commit@v7
+        with:
+          message: 'Bicep Built"
+          add: '.'
