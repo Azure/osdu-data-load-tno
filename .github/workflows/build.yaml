@@ -1,0 +1,13 @@
+name: 'Build'
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bicep Build
+        uses: aliencube/bicep-build-actions@v0.3
+        with:
+            files: azuredeploy.bicep

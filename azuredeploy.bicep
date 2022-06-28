@@ -65,7 +65,7 @@ resource acrIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2020
 }
 
 resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  name: 'load-blob-${utcValue}'
+  name: 'load-share-${utcValue}'
   location: location
   kind: 'AzureCLI'
   properties: {
