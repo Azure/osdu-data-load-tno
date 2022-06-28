@@ -1,5 +1,5 @@
-# docker build --file Dockerfile --tag osdu-data-load . --build-arg TENANT_ID=$AZURE_TENANT --build-arg NAME=$NAME
-# docker run -it --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET --env REFRESH_TOKEN=$REFRESH_TOKEN osdu-data-load
+# docker build --file Dockerfile --tag osdu-data-load . --build-arg AZURE_TENANT=$AZURE_TENANT --build-arg NAME=$NAME --build-arg DOMAIN=$DOMAIN
+# docker run -it -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load
 
 FROM mcr.microsoft.com/mirror/docker/library/ubuntu:20.04 as base
 ARG USERNAME=app
@@ -38,7 +38,7 @@ COPY requirements.txt requirements.txt
 RUN echo "**** Install Python Requirements ****" && \
   pip install --upgrade pip && \
   pip install -r requirements.txt
-RUN mkdir open-test-data
+RUN mkdir open-test-data && mkdir output
 
 # Copy Load Scripts
 COPY config config
@@ -48,11 +48,13 @@ COPY setup.py setup.py
 COPY load.sh load.sh
 
 # Generate Manifests
-ARG TENANT_ID
+ARG AZURE_TENANT
 ARG NAME="platform"
 ARG DOMAIN="energy.azure.com"
 ARG PARTITION="opendes"
-ENV TENANT_ID=$TENANT_ID
+ENV AZURE_TENANT=$AZURE_TENANT
+ENV NAME=$NAME
+ENV DOMAIN=$DOMAIN
 ENV DATA_PARTITION=$NAME-$PARTITION
 ENV OSDU_ENDPOINT=https://$NAME.$DOMAIN
 ENV LOGIN_ENDPOINT=https://login.microsoftonline.com/${AZURE_TENANT}/oauth2/v2.0/token
