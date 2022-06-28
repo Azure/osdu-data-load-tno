@@ -15,8 +15,4 @@ jobs:
         with:
           bicepFilePath: main.bicep
           outputFilePath: azuredeploy.json
-      - name: Git CheckIn
-        uses: EndBug/add-and-commit@v7
-        with:
-          message: 'Bicep Built"
-          add: '.'
+      - uses: stefanzweifel/git-auto-commit-action@v4
