@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "5980334157339641157"
+      "templateHash": "3066963119001889742"
     }
   },
   "parameters": {
@@ -26,7 +26,11 @@
   },
   "variables": {
     "shareName": "open-test-data",
-    "storageAccountName": "[uniqueString(resourceGroup().id, deployment().name)]"
+    "storageAccountName": "[uniqueString(resourceGroup().id, deployment().name)]",
+    "roleAssignmentName": "[guid(format('{0}contributor', resourceGroup().name))]",
+    "acrName": "[uniqueString(resourceGroup().id, deployment().name)]",
+    "managedIdentityName": "[uniqueString(resourceGroup().id, deployment().name)]",
+    "contributorRoleDefinitionId": "[format('/subscriptions/{0}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c', subscription().subscriptionId)]"
   },
   "resources": [
     {
@@ -56,6 +60,47 @@
       "kind": "StorageV2"
     },
     {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2021-09-30-preview",
+      "name": "[variables('managedIdentityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2021-06-01-preview",
+      "name": "[variables('acrName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName')))]": {}
+        }
+      },
+      "properties": {
+        "anonymousPullEnabled": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2020-10-01-preview",
+      "name": "[variables('roleAssignmentName')]",
+      "properties": {
+        "description": "Managed identity access for the RG",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))).principalId]",
+        "roleDefinitionId": "[variables('contributorRoleDefinitionId')]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.Resources/deploymentScripts",
       "apiVersion": "2020-10-01",
       "name": "[format('load-blob-{0}', parameters('utcValue'))]",
@@ -80,7 +125,7 @@
             "value": "open-test-data"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n      SCRIPT_DIR=$( cd -- \"$( dirname -- \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n      DATA_DIR=\"/tmp/${AZURE_STORAGE_SHARE}\"\n\n      echo -e \"Retrieving data from OSDU...\" 2>&1 | tee -a script_log\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz 2>&1 | tee -a script_log\n\n      # Extract datasets\n      mkdir -p $DATA_DIR/datasets/documents\n      mkdir -p $DATA_DIR/datasets/markers\n      mkdir -p $DATA_DIR/datasets/trajectories\n      mkdir -p $DATA_DIR/datasets/well-logs\n\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs  2>&1 | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers 2>&1 | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories 2>&1 | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs 2>&1 | tee -a script_log\n\n\n      # Extract schemas\n      mkdir -p $DATA_DIR/schemas\n      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema | tee -a script_log\n\n\n      # Extract Manifests\n      mkdir -p $DATA_DIR/templates\n      mkdir -p $DATA_DIR/TNO/contrib\n      mkdir -p $DATA_DIR/TNO/provided\n      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates  | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO  | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO  | tee -a script_log\n\n\n      # Upload to Azure Storage\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source $DATA_DIR 2>&1 | tee -a script_log\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      FILE_NAME=open-test-data.gz\n      SCRIPT_DIR=$( cd -- \"$( dirname -- \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n      DATA_DIR=\"/tmp/${AZURE_STORAGE_SHARE}\"\n\n      echo -e \"Retrieving data from OSDU...\" 2>&1 | tee -a script_log\n      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz 2>&1 | tee -a script_log\n\n      # Extract datasets\n      mkdir -p $DATA_DIR/datasets/documents\n      mkdir -p $DATA_DIR/datasets/markers\n      mkdir -p $DATA_DIR/datasets/trajectories\n      mkdir -p $DATA_DIR/datasets/well-logs\n\n      #tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs  2>&1 | tee -a script_log\n      #tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers 2>&1 | tee -a script_log\n      #tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories 2>&1 | tee -a script_log\n      #tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs 2>&1 | tee -a script_log\n\n\n      # Extract schemas\n      mkdir -p $DATA_DIR/schema\n      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema | tee -a script_log\n\n\n      # Extract Manifests\n      mkdir -p $DATA_DIR/templates\n      mkdir -p $DATA_DIR/TNO/contrib\n      mkdir -p $DATA_DIR/TNO/provided\n      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates  | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO  | tee -a script_log\n      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO  | tee -a script_log\n\n\n      # Upload to Azure Storage\n      az storage file upload-batch \\\n        --account-name $AZURE_STORAGE_ACCOUNT \\\n        --account-key $AZURE_STORAGE_KEY \\\n        --destination $AZURE_STORAGE_SHARE \\\n        --source $DATA_DIR 2>&1 | tee -a script_log\n    "
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
