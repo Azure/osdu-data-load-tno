@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "12685140969929193386"
+      "templateHash": "5123147708032134211"
     }
   },
   "variables": {
@@ -192,7 +192,6 @@
           "parameters": {
             "endpoint": {
               "type": "string",
-              "defaultValue": "myosdu.mydomain.com",
               "metadata": {
                 "description": "OSDU API Endpoint (FQDN)"
               }
@@ -246,12 +245,12 @@
             {
               "type": "Microsoft.ContainerInstance/containerGroups",
               "apiVersion": "2021-09-01",
-              "name": "[[concat('data-load-', parameters('name'))]",
+              "name": "[[concat('osdu-data-load-', parameters('endpoint'))]",
               "location": "[[parameters('location')]",
               "properties": {
                 "containers": [
                   {
-                    "name": "deploy",
+                    "name": "load",
                     "properties": {
                       "image": "[[concat(variables('acrName'), '.azurecr.io/', variables('imageName'))]",
                       "command": [],
