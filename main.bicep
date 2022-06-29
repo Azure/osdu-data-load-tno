@@ -218,7 +218,6 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
       'parameters': {
         'endpoint': {
           'type': 'string'
-          'defaultValue': 'myosdu.mydomain.com'
           'metadata': {
             'description': 'OSDU API Endpoint (FQDN)'
           }
@@ -272,12 +271,12 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
         {
           'type': 'Microsoft.ContainerInstance/containerGroups'
           'apiVersion': '2021-09-01'
-          'name': '[concat(\'data-load-\', parameters(\'name\'))]'
+          'name': '[concat(\'osdu-data-load-\', parameters(\'endpoint\'))]'
           'location': '[parameters(\'location\')]'
           'properties': {
             'containers': [
               {
-                'name': 'deploy'
+                'name': 'load'
                 'properties': {
                   'image': '[concat(variables(\'acrName\'), \'.azurecr.io/\', variables(\'imageName\'))]'
                   'command': [ ]
@@ -357,6 +356,5 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
     }
   }
 }
-
 
 output scriptLogs string = reference('${uploadDeploymentScript.id}/logs/default', uploadDeploymentScript.apiVersion, 'Full').properties.log
