@@ -218,44 +218,49 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
       'parameters': {
         'endpoint': {
           'type': 'string'
+          'defaultValue': 'myosdu.mydomain.com'
           'metadata': {
-            'description': 'FQDN Endpoint ie: myosdu.mydomain.com'
+            'description': 'OSDU API Endpoint (FQDN)'
           }
         }
         'dataPartition': {
           'type': 'string'
+          'defaultValue': 'opendes'
           'metadata': {
-            'description': 'Data Partition name ie: mypartition'
+            'description': 'OSDU Data Partition Name'
           }
         }
         'viewerGroup': {
           'type': 'string'
+          'defaultValue': 'data.default.viewers@contoso.com'
           'metadata': {
-            'description': 'Reader Group ie: data.default.viewers@contoso.com'
+            'description': 'OSDU Reader Group ACL'
           }
         }
         'ownerGroup': {
           'type': 'string'
+          'defaultValue': 'data.default.owners@contoso.com'
           'metadata': {
-            'description': 'Owner Group ie: data.default.owners@contoso.com'
+            'description': 'OSDU Owner Group ACL'
           }
         }
         'legalTag': {
           'type': 'string'
+          'defaultValue': 'open-test-data'
           'metadata': {
-            'description': 'Legal Tag Name ie: legal-tag-load'
+            'description': 'OSDU Legal Tag Name'
           }
         }
         'clientId': {
           'type': 'string'
           'metadata': {
-            'description': 'Client Id.'
+            'description': 'OSDU Client Id'
           }
         }
         'clientSecret': {
           'type': 'string'
           'metadata': {
-            'description': 'Client Secret.'
+            'description': 'OSDU Client Secret'
           }
         }
       }

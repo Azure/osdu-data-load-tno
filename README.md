@@ -17,7 +17,7 @@ Estimated Time: 1.5 hours
 
 __Step 2__
 
-Load data to an OSDU instance by executing the Deployment Script created by `Step 1`.
+Load data to an OSDU instance by executing the Template Spec created by `Step 1`.
 
 Estimated Time: 45 minutes
 
