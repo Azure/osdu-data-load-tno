@@ -3,7 +3,7 @@
 
 ## Operations Persona
 
-This persona method of loading data is intended for those desiring to load data in an automated fashion using Azure Resources.
+This method of loading data provides a way to load data using ARM templates.
 
 This solution leverages a cloud based container to execute a data load from data hosted in an Azure Storage Account file share.  To load data follow the 2 step process.
 
@@ -25,7 +25,7 @@ Estimated Time: 45 minutes
 
 ## Developer Persona
 
-This persona method of loading data is intended for engineers wishing to customize control or manually work with a data load.
+This method of loading data is intended for engineers wishing to customize control or manually work with data loads.
 
 This solution supports [GitHub Codespaces](https://github.com/features/codespaces) as preferred, however [VSCode Remote containers](https://code.visualstudio.com/docs/remote/containers) can be utilized assuming the host machine has enough resources allocated to Docker.  A custom container will be built with a post container build hook that will download the [open-test-data](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data) from OSDU and copy files into a custom directory structure for the ingestion scripts to process.
 
