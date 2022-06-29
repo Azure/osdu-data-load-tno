@@ -75,7 +75,7 @@ resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-0
   properties: {
     azCliVersion: '2.37.0'
     timeout: 'PT2H'
-    retentionInterval: 'PT1H'
+    retentionInterval: 'PT15M'
     cleanupPreference: 'OnSuccess'
     environmentVariables: [
       {
@@ -161,7 +161,7 @@ resource acrDockerImage 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   properties: {
     azCliVersion: '2.37.0'
     timeout: 'PT2H'
-    retentionInterval: 'PT1H'
+    retentionInterval: 'PT15M'
     cleanupPreference: 'OnSuccess'
     environmentVariables: [
       {
