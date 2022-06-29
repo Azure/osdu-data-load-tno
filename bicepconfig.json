@@ -1,0 +1,13 @@
+{
+  "analyzers": {
+    "core": {
+      "enabled": true,
+      "verbose": false,
+      "rules": {
+        "no-loc-expr-outside-params": {
+          "level": "off"
+        }
+      }
+    }
+  }
+}

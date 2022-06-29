@@ -1,22 +1,19 @@
-
-
-@description('UTC timestamp used to create distinct deployment scripts for each deployment')
-param utcValue string = utcNow()
-
-@description('Location of Storage Account')
-param location string = resourceGroup().location
-
 var shareName = 'open-test-data'
 var storageAccountName = uniqueString(resourceGroup().id, deployment().name)
 var roleAssignmentName = guid('${resourceGroup().name}contributor')
 var acrName = uniqueString(resourceGroup().id, deployment().name)
 var managedIdentityName = uniqueString(resourceGroup().id, deployment().name)
-var contributorRoleDefinitionId = '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+var contributorRoleDefinitionId = resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+var containerImageName = 'osdu-data-load-tno:latest'
 
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
+  name: managedIdentityName
+  location: resourceGroup().location
+}
 
 resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   name: storageAccountName
-  location: location
+  location: resourceGroup().location
   sku: {
     name: 'Standard_LRS'
   }
@@ -25,27 +22,26 @@ resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   resource fileService 'fileServices' = {
     name: 'default'
 
-    resource share 'shares' = {
+    resource dataShare 'shares' = {
       name: shareName
+    }
+
+    resource outputShare 'shares' = {
+      name: 'output'
     }
   }
 }
 
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
-  name: managedIdentityName
-  location: location
-}
-
-resource acrResource 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
+resource registry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
   name: acrName
-  location: location
+  location: resourceGroup().location
   sku: {
     name: 'Standard'
   }
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${managedIdentity.id}': {}
+      '${userAssignedIdentity.id}': {}
     }
   }
   properties: {
@@ -53,21 +49,27 @@ resource acrResource 'Microsoft.ContainerRegistry/registries@2021-06-01-preview'
   }
 }
 
-resource acrIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
+resource roleAssignment  'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: roleAssignmentName
   scope: resourceGroup()
   properties: {
     description: 'Managed identity access for the RG'
-    principalId: managedIdentity.properties.principalId
     roleDefinitionId: contributorRoleDefinitionId
+    principalId: userAssignedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
-resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  name: 'load-share-${utcValue}'
-  location: location
+resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  name: 'fileshare-load'
+  location: resourceGroup().location
   kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentity.id}': {}
+    }
+  }
   properties: {
     azCliVersion: '2.37.0'
     timeout: 'PT2H'
@@ -90,48 +92,109 @@ resource blobDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01'
     scriptContent: '''
       #!/bin/bash
       set -e
+      LOG=script_log.txt
       FILE_NAME=open-test-data.gz
       SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
       DATA_DIR="/tmp/${AZURE_STORAGE_SHARE}"
 
-      echo -e "Retrieving data from OSDU..." 2>&1 | tee -a script_log
-      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz 2>&1 | tee -a script_log
+      echo -e "Retrieving data from OSDU..." 2>&1 | tee -a $LOG
+      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M8/open-test-data-Azure-M8.tar.gz 2>&1 | tee -a $LOG
 
-      # Extract datasets
+      # Create Directory structure
+      echo -e "Creating Directory structure..." 2>&1 | tee -a $LOG
       mkdir -p $DATA_DIR/datasets/documents
       mkdir -p $DATA_DIR/datasets/markers
       mkdir -p $DATA_DIR/datasets/trajectories
       mkdir -p $DATA_DIR/datasets/well-logs
-
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs  2>&1 | tee -a script_log
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers 2>&1 | tee -a script_log
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories 2>&1 | tee -a script_log
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs 2>&1 | tee -a script_log
-
-
-      # Extract schemas
       mkdir -p $DATA_DIR/schema
-      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema | tee -a script_log
-
-
-      # Extract Manifests
       mkdir -p $DATA_DIR/templates
       mkdir -p $DATA_DIR/TNO/contrib
       mkdir -p $DATA_DIR/TNO/provided
-      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates  | tee -a script_log
-      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO  | tee -a script_log
-      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO  | tee -a script_log
+      ls -l $DATA_DIR | tee -a $LOG
 
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/USGS_docs
+      echo -e "Extracted Dataset Documents" 2>&1 | tee -a $LOG
+
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/markers
+      echo -e "Extracted Dataset Markers" 2>&1 | tee -a $LOG
+
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/trajectories
+      echo -e "Extracted Dataset Trajectories" 2>&1 | tee -a $LOG
+
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M8/rc--1.0.0/1-data/3-provided/well-logs   
+      echo -e "Extracted Dataset Well Logs" 2>&1 | tee -a $LOG
+
+      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/3-schema
+      echo -e "Extracted Schemas" 2>&1 | tee -a $LOG
+      
+      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/5-templates
+      echo -e "Extracted Templates" 2>&1 | tee -a $LOG
+
+      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M8/rc--3.0.0/1-data/3-provided/TNO
+      echo -e "Extracted TNO Contrib" 2>&1 | tee -a $LOG
+
+      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M8/rc--3.0.0/4-instances/TNO
+      echo -e "Extracted TNO Provided" 2>&1 | tee -a $LOG
 
       # Upload to Azure Storage
-      az storage file upload-batch \
-        --account-name $AZURE_STORAGE_ACCOUNT \
-        --account-key $AZURE_STORAGE_KEY \
-        --destination $AZURE_STORAGE_SHARE \
-        --source $DATA_DIR 2>&1 | tee -a script_log
+      echo -e "Files Uploading..." 2>&1 | tee -a $LOG
+      result=$(az storage file upload-batch --destination $AZURE_STORAGE_SHARE --source $DATA_DIR -ojson)
+      echo -e "Upload Complete" 2>&1 | tee -a $LOG
+
+      echo $result | jq -c > $AZ_SCRIPTS_OUTPUT_PATH
     '''
   }
 }
 
-output scriptLogs string = reference('${blobDeploymentScript.id}/logs/default', blobDeploymentScript.apiVersion, 'Full').properties.log
-output storageAccountName string = storageAccountName
+resource acrDockerImage 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  name: 'build-and-push-image'
+  location: resourceGroup().location
+  kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentity.id}': {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.30.0'
+    timeout: 'PT15M'
+    retentionInterval: 'PT1H'
+    cleanupPreference: 'OnSuccess'
+    environmentVariables: [
+      {
+        name: 'CONTAINER_IMAGE_NAME'
+        value: containerImageName
+      }
+      {
+        name: 'REGISTRY_NAME'
+        value: acrName
+      }
+      {
+        name: 'AZURE_TENANT'
+        value: subscription().tenantId
+      }
+    ]
+    scriptContent: '''
+      #!/bin/bash
+      set -e
+      LOG=script_log.txt
+      FILE_NAME=main.zip
+      SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+      DATA_DIR="/tmp/osdu-data-load-tno-main"
+
+      echo -e "Retrieving Source..." 2>&1 | tee -a $LOG
+      wget -O $FILE_NAME https://github.com/Azure/osdu-data-load-tno/archive/refs/heads/main.zip 2>&1 | tee -a $LOG
+      unzip $FILE_NAME -d /tmp
+      echo -e "Extracted Source" 2>&1 | tee -a $LOG
+
+      echo -e "Build and Import Image: ${CONTAINER_IMAGE_NAME} into ACR: ${REGISTRY_NAME}" 2>&1 | tee -a $LOG
+      az acr build --build-arg AZURE_TENANT=$AZURE_TENANT --image ${CONTAINER_IMAGE_NAME} --registry ${REGISTRY_NAME} --file ${DATA_DIR}/Dockerfile $DATA_DIR | tee -a $LOG
+
+      result=$(az acr repository list -n ${REGISTRY_NAME} -ojson)
+      echo $result | jq -c > $AZ_SCRIPTS_OUTPUT_PATH
+    '''
+  }
+}
+
+output scriptLogs string = reference('${uploadDeploymentScript.id}/logs/default', uploadDeploymentScript.apiVersion, 'Full').properties.log
