@@ -62,7 +62,8 @@ function ConfigureIni() {
   if [ $CONFIGURE_INI = true ]; then
     echo "Configuring dataload.ini"
     cp -f $SCRIPT_DIR/src/config/dataload.template.ini $SCRIPT_DIR/output/dataload.ini
-    sed -i -e "s?<ACL>?${ACL}?g" "$SCRIPT_DIR/output/dataload.ini"
+    sed -i -e "s?<ACL_OWNER>?${ACL_OWNER}?g" "$SCRIPT_DIR/output/dataload.ini"
+    sed -i -e "s?<ACL_VIEWER>?${ACL_VIEWER}?g" "$SCRIPT_DIR/output/dataload.ini"
     sed -i -e "s?<OSDU_ENDPOINT>?${OSDU_ENDPOINT}?g" "$SCRIPT_DIR/output/dataload.ini"
     sed -i -e "s/<LEGAL_TAG>/${LEGAL_TAG}/g" "$SCRIPT_DIR/output/dataload.ini"
     sed -i -e "s/<DATA_PARTITION>/${DATA_PARTITION}/g" "$SCRIPT_DIR/output/dataload.ini"

@@ -1,11 +1,13 @@
 # docker build --build-arg AZURE_TENANT=$AZURE_TENANT --file Dockerfile --tag osdu-data-load . 
-# docker run -it -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env NAME=$NAME --env DOMAIN=$DOMAIN --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load
+# docker run -it -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env DATA_PARTITION=$NAME-$PARTITION  --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load
 
 FROM mcr.microsoft.com/mirror/docker/library/ubuntu:20.04 as base
+ARG AZURE_TENANT
 ARG USERNAME=app
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
-ARG AZURE_TENANT
+ARG NAME=platform
+ARG PARTITION=opendes
 
 # Install packages
 RUN apt-get update \
@@ -50,11 +52,12 @@ COPY load.sh load.sh
 
 # Generate Manifests
 ENV AZURE_TENANT=$AZURE_TENANT
-ENV NAME=$NAME
-ENV DOMAIN=$DOMAIN
 ENV DATA_PARTITION=$NAME-$PARTITION
-ENV OSDU_ENDPOINT=https://$NAME.$DOMAIN
+ENV OSDU_ENDPOINT=https://$END_POINT
 ENV LOGIN_ENDPOINT=https://login.microsoftonline.com/${AZURE_TENANT}/oauth2/v2.0/token
+ENV ACL_OWNER=data.default.owners
+ENV ACL_VIEWER=data.default.viewers
+ENV DOMAIN=contoso.com
 ENV LEGAL_TAG=${DATA_PARTITION}-open-test-data
 ENV PIP_INSTALL=false
 

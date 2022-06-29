@@ -56,7 +56,8 @@
     "workspaceFolder": "/workspace",
     "containerEnv": {
       "DOMAIN": "contoso.com",
-      "ACL": "default"
+      "ACL_OWNER": "data.default.owners",
+      "ACL_VIEWER": "data.default.viewers"
     },
     "runArgs": [
       "--env-file",

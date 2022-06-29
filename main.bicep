@@ -231,14 +231,14 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
         }
         'viewerGroup': {
           'type': 'string'
-          'defaultValue': 'data.default.viewers@contoso.com'
+          'defaultValue': 'data.default.viewers'
           'metadata': {
             'description': 'OSDU Reader Group ACL'
           }
         }
         'ownerGroup': {
           'type': 'string'
-          'defaultValue': 'data.default.owners@contoso.com'
+          'defaultValue': 'data.default.owners'
           'metadata': {
             'description': 'OSDU Owner Group ACL'
           }
@@ -290,11 +290,11 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                       'value': '[parameters(\'dataPartition\')]'
                     }
                     {
-                      'name': 'VIEWER_GROUP'
+                      'name': 'ACL_VIEWER'
                       'value': '[parameters(\'viewerGroup\')]'
                     }
                     {
-                      'name': 'OWNER_GROUP'
+                      'name': 'ACL_OWNER'
                       'value': '[parameters(\'ownerGroup\')]'
                     }
                     {
