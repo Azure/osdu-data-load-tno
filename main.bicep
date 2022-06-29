@@ -5,7 +5,7 @@ var acrName = uniqueString(resourceGroup().id, deployment().name)
 var managedIdentityName = uniqueString(resourceGroup().id, deployment().name)
 var contributorRoleDefinitionId = resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
 var containerImageName = 'osdu-data-load-tno:latest'
-var templateSpecName = 'OpenTestDataLoad'
+var templateSpecName = 'osdu-data-load-tno'
 var templateSpecVersionName = '1.0'
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
