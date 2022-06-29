@@ -307,6 +307,16 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                     }
                   ]
                   'ports': [ ]
+                  'volumeMounts': [
+                    {
+                      'name': 'opentestdata'
+                      'mountPath': '/app/open-test-data'
+                    }
+                    {
+                      'name': 'output'
+                      'mountPath': '/app/output'
+                    }
+                  ]
                   'resources': {
                     'requests': {
                       'cpu': 4
@@ -318,6 +328,24 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
             ]
             'osType': 'Linux'
             'restartPolicy': 'Never'
+             'volumes': [
+                {
+                  'name': 'opentestdata'
+                  'azureFile': {
+                    'shareName': shareName
+                    'storageAccountName': storage.name
+                    'storageAccountKey': storage.listKeys().keys[0].value
+                  }
+                }
+                {
+                  'name': 'output'
+                  'azureFile': {
+                    'shareName': 'output'
+                    'storageAccountName': storage.name
+                    'storageAccountKey': storage.listKeys().keys[0].value
+                  }
+                }
+              ]
           }
         }
       ]
