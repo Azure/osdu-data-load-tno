@@ -159,8 +159,8 @@ resource acrDockerImage 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
     }
   }
   properties: {
-    azCliVersion: '2.30.0'
-    timeout: 'PT15M'
+    azCliVersion: '2.37.0'
+    timeout: 'PT2H'
     retentionInterval: 'PT1H'
     cleanupPreference: 'OnSuccess'
     environmentVariables: [
