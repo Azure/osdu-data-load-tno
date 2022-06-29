@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "2145137260288527878"
+      "templateHash": "7752602260162668791"
     }
   },
   "variables": {
@@ -164,7 +164,7 @@
             "value": "[subscription().tenantId]"
           }
         ],
-        "scriptContent": "      #!/bin/bash\n      set -e\n      LOG=script_log.txt\n      FILE_NAME=main.zip\n      SCRIPT_DIR=$( cd -- \"$( dirname -- \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n      DATA_DIR=\"/tmp/osdu-data-load-tno-main\"\n\n      echo -e \"Retrieving Source...\" 2>&1 | tee -a $LOG\n      wget -O $FILE_NAME https://github.com/Azure/osdu-data-load-tno/archive/refs/heads/main.zip 2>&1 | tee -a $LOG\n      unzip $FILE_NAME -d /tmp\n      echo -e \"Extracted Source\" 2>&1 | tee -a $LOG\n\n      echo -e \"Build and Import Image: ${CONTAINER_IMAGE_NAME} into ACR: ${REGISTRY_NAME}\" 2>&1 | tee -a $LOG\n      az acr build --build-arg AZURE_TENANT=$AZURE_TENANT --image ${CONTAINER_IMAGE_NAME} --registry ${REGISTRY_NAME} --file ${DATA_DIR}/Dockerfile $DATA_DIR | tee -a $LOG\n\n      result=$(az acr repository list -n ${REGISTRY_NAME} -ojson)\n      echo $result | jq -c > $AZ_SCRIPTS_OUTPUT_PATH\n    "
+        "scriptContent": "      #!/bin/bash\n      set -e\n      LOG=script_log.txt\n      FILE_NAME=main.zip\n      SCRIPT_DIR=$( cd -- \"$( dirname -- \"${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n      DATA_DIR=\"/tmp/osdu-data-load-tno-main\"\n\n      echo -e \"Retrieving Source...\" 2>&1 | tee -a $LOG\n      wget -O $FILE_NAME https://github.com/Azure/osdu-data-load-tno/archive/refs/heads/main.zip 2>&1 | tee -a $LOG\n      unzip $FILE_NAME -d /tmp\n      echo -e \"Extracted Source\" 2>&1 | tee -a $LOG\n\n      echo -e \"Build and Import Image: ${CONTAINER_IMAGE_NAME} into ACR: ${REGISTRY_NAME}\" 2>&1 | tee -a $LOG\n      az acr build --build-arg AZURE_TENANT=$AZURE_TENANT --image ${CONTAINER_IMAGE_NAME} --registry ${REGISTRY_NAME} --file ${DATA_DIR}/Dockerfile $DATA_DIR | tee -a $LOG\n\n      echo '{\"status\": {\"download\": \"Success\", \"extract\": \"Success\", \"docker\": \"Success\"}}' | jq > $AZ_SCRIPTS_OUTPUT_PATH\n    "
       },
       "dependsOn": [
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]"
