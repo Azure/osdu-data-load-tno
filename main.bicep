@@ -228,28 +228,24 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
           'metadata': {
             'description': 'Data Partition name ie: mypartition'
           }
-          'default': 'opendes'
         }
         'viewerGroup': {
           'type': 'string'
           'metadata': {
             'description': 'Reader Group ie: data.default.viewers@contoso.com'
           }
-          'default': 'data.default.viewers@contoso.com'
         }
         'ownerGroup': {
           'type': 'string'
           'metadata': {
             'description': 'Owner Group ie: data.default.owners@contoso.com'
           }
-          'default': 'data.default.owners@contoso.com'
         }
         'legalTag': {
           'type': 'string'
           'metadata': {
             'description': 'Legal Tag Name ie: legal-tag-load'
           }
-          'default': 'legal-tag-load'
         }
         'clientId': {
           'type': 'string'
