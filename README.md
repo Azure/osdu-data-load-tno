@@ -3,9 +3,7 @@
 
 ## Operations Persona
 
-This method of loading data provides a way to load data using ARM templates.
-
-This solution leverages a cloud based container to execute a data load from data hosted in an Azure Storage Account file share.  To load data follow the 2 step process.
+This method of loading data provides a way to load data using ARM templates. The solution leverages a cloud based container to execute a data load using data hosted in an Azure Storage Account file share.  To load data follow the 2 step process.
 
 __Step 1__
 
