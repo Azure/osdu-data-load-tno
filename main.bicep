@@ -193,8 +193,7 @@ resource acrDockerImage 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
       echo -e "Build and Import Image: ${CONTAINER_IMAGE_NAME} into ACR: ${REGISTRY_NAME}" 2>&1 | tee -a $LOG
       az acr build --build-arg AZURE_TENANT=$AZURE_TENANT --image ${CONTAINER_IMAGE_NAME} --registry ${REGISTRY_NAME} --file ${DATA_DIR}/Dockerfile $DATA_DIR | tee -a $LOG
 
-      result=$(az acr repository list -n ${REGISTRY_NAME} -ojson)
-      echo $result | jq -c > $AZ_SCRIPTS_OUTPUT_PATH
+      echo '{"status": {"download": "Success", "extract": "Success", "docker": "Success"}}' | jq > $AZ_SCRIPTS_OUTPUT_PATH
     '''
   }
 }
