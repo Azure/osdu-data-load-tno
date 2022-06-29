@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "5123147708032134211"
+      "templateHash": "10925521275104294746"
     }
   },
   "variables": {
@@ -205,14 +205,14 @@
             },
             "viewerGroup": {
               "type": "string",
-              "defaultValue": "data.default.viewers@contoso.com",
+              "defaultValue": "data.default.viewers",
               "metadata": {
                 "description": "OSDU Reader Group ACL"
               }
             },
             "ownerGroup": {
               "type": "string",
-              "defaultValue": "data.default.owners@contoso.com",
+              "defaultValue": "data.default.owners",
               "metadata": {
                 "description": "OSDU Owner Group ACL"
               }
@@ -264,11 +264,11 @@
                           "value": "[[parameters('dataPartition')]"
                         },
                         {
-                          "name": "VIEWER_GROUP",
+                          "name": "ACL_VIEWER",
                           "value": "[[parameters('viewerGroup')]"
                         },
                         {
-                          "name": "OWNER_GROUP",
+                          "name": "ACL_OWNER",
                           "value": "[[parameters('ownerGroup')]"
                         },
                         {
