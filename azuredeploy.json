@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "7752602260162668791"
+      "templateHash": "647616438664145023"
     }
   },
   "variables": {
@@ -281,6 +281,16 @@
                         }
                       ],
                       "ports": [],
+                      "volumeMounts": [
+                        {
+                          "name": "opentestdata",
+                          "mountPath": "/app/open-test-data"
+                        },
+                        {
+                          "name": "output",
+                          "mountPath": "/app/output"
+                        }
+                      ],
                       "resources": {
                         "requests": {
                           "cpu": 4,
@@ -291,14 +301,33 @@
                   }
                 ],
                 "osType": "Linux",
-                "restartPolicy": "Never"
+                "restartPolicy": "Never",
+                "volumes": [
+                  {
+                    "name": "opentestdata",
+                    "azureFile": {
+                      "shareName": "[variables('shareName')]",
+                      "storageAccountName": "[variables('storageAccountName')]",
+                      "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value]"
+                    }
+                  },
+                  {
+                    "name": "output",
+                    "azureFile": {
+                      "shareName": "output",
+                      "storageAccountName": "[variables('storageAccountName')]",
+                      "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value]"
+                    }
+                  }
+                ]
               }
             }
           ]
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/templateSpecs', variables('templateSpecName'))]"
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('templateSpecName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     }
   ],
