@@ -1,5 +1,5 @@
 # docker build --build-arg AZURE_TENANT=$AZURE_TENANT --file Dockerfile --tag osdu-data-load . 
-# docker run -it -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env AZURE_TENANT=$AZURE_TENANT --env NAME=$NAME --env DOMAIN=$DOMAIN --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load
+# docker run -it -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env NAME=$NAME --env DOMAIN=$DOMAIN --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load
 
 FROM mcr.microsoft.com/mirror/docker/library/ubuntu:20.04 as base
 ARG USERNAME=app

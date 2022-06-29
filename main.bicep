@@ -5,6 +5,8 @@ var acrName = uniqueString(resourceGroup().id, deployment().name)
 var managedIdentityName = uniqueString(resourceGroup().id, deployment().name)
 var contributorRoleDefinitionId = resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
 var containerImageName = 'osdu-data-load-tno:latest'
+var templateSpecName = 'OpenTestDataLoad'
+var templateSpecVersionName = '1.0'
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
   name: managedIdentityName
@@ -138,10 +140,10 @@ resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-0
 
       # Upload to Azure Storage
       echo -e "Files Uploading..." 2>&1 | tee -a $LOG
-      result=$(az storage file upload-batch --destination $AZURE_STORAGE_SHARE --source $DATA_DIR -ojson)
+      az storage file upload-batch --destination $AZURE_STORAGE_SHARE --source $DATA_DIR | tee -a $LOG
       echo -e "Upload Complete" 2>&1 | tee -a $LOG
 
-      echo $result | jq -c > $AZ_SCRIPTS_OUTPUT_PATH
+      echo '{"status": {"download": "Success", "extract": "Success", "upload": "Success"}}' | jq > $AZ_SCRIPTS_OUTPUT_PATH
     '''
   }
 }
@@ -196,5 +198,137 @@ resource acrDockerImage 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
     '''
   }
 }
+
+resource createTemplateSpec 'Microsoft.Resources/templateSpecs@2021-05-01' = {
+  name: templateSpecName
+  location: resourceGroup().location
+  properties: {
+    description: 'Load OSDU with Open Test Data.'
+    displayName: 'Open Test Data Load'
+  }
+}
+
+resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2021-05-01' = {
+  parent: createTemplateSpec
+  name: templateSpecVersionName
+  location: resourceGroup().location
+  properties: {
+    mainTemplate: {
+      '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
+      'contentVersion': '1.0.0.0'
+      'parameters': {
+        'endpoint': {
+          'type': 'string'
+          'metadata': {
+            'description': 'FQDN Endpoint ie: myosdu.mydomain.com'
+          }
+        }
+        'dataPartition': {
+          'type': 'string'
+          'metadata': {
+            'description': 'Data Partition name ie: mypartition'
+          }
+          'default': 'opendes'
+        }
+        'viewerGroup': {
+          'type': 'string'
+          'metadata': {
+            'description': 'Reader Group ie: data.default.viewers@contoso.com'
+          }
+          'default': 'data.default.viewers@contoso.com'
+        }
+        'ownerGroup': {
+          'type': 'string'
+          'metadata': {
+            'description': 'Owner Group ie: data.default.owners@contoso.com'
+          }
+          'default': 'data.default.owners@contoso.com'
+        }
+        'legalTag': {
+          'type': 'string'
+          'metadata': {
+            'description': 'Legal Tag Name ie: legal-tag-load'
+          }
+          'default': 'legal-tag-load'
+        }
+        'clientId': {
+          'type': 'string'
+          'metadata': {
+            'description': 'Client Id.'
+          }
+        }
+        'clientSecret': {
+          'type': 'string'
+          'metadata': {
+            'description': 'Client Secret.'
+          }
+        }
+      }
+      'variables': {
+        'acrName': acrName
+        'imageName': containerImageName
+      }
+      'resources': [
+        {
+          'type': 'Microsoft.ContainerInstance/containerGroups'
+          'apiVersion': '2021-09-01'
+          'name': '[concat(\'data-load-\', parameters(\'name\'))]'
+          'location': '[parameters(\'location\')]'
+          'properties': {
+            'containers': [
+              {
+                'name': 'deploy'
+                'properties': {
+                  'image': '[concat(variables(\'acrName\'), \'.azurecr.io/\', variables(\'imageName\'))]'
+                  'command': [ ]
+                  'environmentVariables': [
+                    {
+                      'name': 'OSDU_ENDPOINT'
+                      'value': '[concat(\'https://\'), parameters(\'endpoint\')]'
+                    }
+                    {
+                      'name': 'DATA_PARTITION'
+                      'value': '[parameters(\'dataPartition\')]'
+                    }
+                    {
+                      'name': 'VIEWER_GROUP'
+                      'value': '[parameters(\'viewerGroup\')]'
+                    }
+                    {
+                      'name': 'OWNER_GROUP'
+                      'value': '[parameters(\'ownerGroup\')]'
+                    }
+                    {
+                      'name': 'LEGAL_TAG'
+                      'value': '[parameters(\'legalTag\')]'
+                    }
+                    {
+                      'name': 'CLIENT_ID'
+                      'value': '[parameters(\'clientId\')]'
+                    }
+                    {
+                      'name': 'CLIENT_SECRET'
+                      'value': '[parameters(\'clientSecret\')]'
+                    }
+                  ]
+                  'ports': [ ]
+                  'resources': {
+                    'requests': {
+                      'cpu': 4
+                      'memoryInGB': 16
+                    }
+                  }
+                }
+              }
+            ]
+            'osType': 'Linux'
+            'restartPolicy': 'Never'
+          }
+        }
+      ]
+    }
+  }
+}
+
 
 output scriptLogs string = reference('${uploadDeploymentScript.id}/logs/default', uploadDeploymentScript.apiVersion, 'Full').properties.log

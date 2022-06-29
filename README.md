@@ -1,18 +1,33 @@
 # osdu-data-load-tno
 
-<!--
+
 ## Operations Persona
+
+This persona method of loading data is intended for those desiring to load data in an automated fashion using Azure Resources.
+
+This solution leverages a cloud based container to execute a data load from data hosted in an Azure Storage Account file share.  To load data follow the 2 step process.
+
+__Step 1__
+
+Deploy resources to Azure using this [ARM template](https://github.com/Azure/osdu-data-load-tno/blob/main/azuredeploy.json). Data will be downloaded from OSDU, extracted and Uploaded into a Storage Account.
 
 [![Load from Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fosdu-data-load-tno%2Fmain%2Fazuredeploy.json)
 
--->
+Estimated Time: 1.5 hours
+
+
+
+__Step 2__
+
+Load data to an OSDU instance by executing the Deployment Script created by `Step 1`.
+
+Estimated Time: 45 minutes
+
 ## Developer Persona
 
+This persona method of loading data is intended for engineers wishing to customize control or manually work with a data load.
+
 This solution supports [GitHub Codespaces](https://github.com/features/codespaces) as preferred, however [VSCode Remote containers](https://code.visualstudio.com/docs/remote/containers) can be utilized assuming the host machine has enough resources allocated to Docker.  A custom container will be built with a post container build hook that will download the [open-test-data](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data) from OSDU and copy files into a custom directory structure for the ingestion scripts to process.
-
-The intended audience for loading data using Code Spaces or Remote Containers is a _Developer Persona_.
-
->Future capability will include [Azure Container Apps](https://docs.microsoft.com/en-us/azure/container-apps/overview) which is intended as an _Operations Persona_.
 
 __Environment Variables__
 
