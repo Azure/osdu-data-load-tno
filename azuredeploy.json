@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "2850344384487342811"
+      "templateHash": "458358491116267073"
     }
   },
   "variables": {
@@ -16,7 +16,7 @@
     "managedIdentityName": "[uniqueString(resourceGroup().id, deployment().name)]",
     "contributorRoleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
     "containerImageName": "osdu-data-load-tno:latest",
-    "templateSpecName": "OpenTestDataLoad",
+    "templateSpecName": "osdu-data-load-tno",
     "templateSpecVersionName": "1.0"
   },
   "resources": [
