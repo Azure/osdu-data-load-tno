@@ -51,7 +51,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = 
   }
 }
 
-resource roleAssignment  'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: roleAssignmentName
   scope: resourceGroup()
   properties: {
@@ -243,6 +243,13 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
             'description': 'OSDU Owner Group ACL'
           }
         }
+        'dataDomain': {
+          'type': 'string'
+          'defaultValue': 'contoso.com'
+          'metadata': {
+            'description': 'OSDU ACL Group Domain'
+          }
+        }
         'legalTag': {
           'type': 'string'
           'defaultValue': 'open-test-data'
@@ -279,7 +286,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                 'name': 'load'
                 'properties': {
                   'image': '[concat(variables(\'acrName\'), \'.azurecr.io/\', variables(\'imageName\'))]'
-                  'command': [ ]
+                  'command': []
                   'environmentVariables': [
                     {
                       'name': 'OSDU_ENDPOINT'
@@ -298,6 +305,10 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                       'value': '[parameters(\'ownerGroup\')]'
                     }
                     {
+                      'name': 'DOMAIN'
+                      'value': '[parameters(\'dataDomain\')]'
+                    }
+                    {
                       'name': 'LEGAL_TAG'
                       'value': '[parameters(\'legalTag\')]'
                     }
@@ -310,7 +321,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                       'value': '[parameters(\'clientSecret\')]'
                     }
                   ]
-                  'ports': [ ]
+                  'ports': []
                   'volumeMounts': [
                     {
                       'name': 'opentestdata'
@@ -332,24 +343,24 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
             ]
             'osType': 'Linux'
             'restartPolicy': 'Never'
-             'volumes': [
-                {
-                  'name': 'opentestdata'
-                  'azureFile': {
-                    'shareName': shareName
-                    'storageAccountName': storage.name
-                    'storageAccountKey': storage.listKeys().keys[0].value
-                  }
+            'volumes': [
+              {
+                'name': 'opentestdata'
+                'azureFile': {
+                  'shareName': shareName
+                  'storageAccountName': storage.name
+                  'storageAccountKey': storage.listKeys().keys[0].value
                 }
-                {
-                  'name': 'output'
-                  'azureFile': {
-                    'shareName': 'output'
-                    'storageAccountName': storage.name
-                    'storageAccountKey': storage.listKeys().keys[0].value
-                  }
+              }
+              {
+                'name': 'output'
+                'azureFile': {
+                  'shareName': 'output'
+                  'storageAccountName': storage.name
+                  'storageAccountKey': storage.listKeys().keys[0].value
                 }
-              ]
+              }
+            ]
           }
         }
       ]
