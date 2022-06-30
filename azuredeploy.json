@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "10925521275104294746"
+      "templateHash": "2959755231576491198"
     }
   },
   "variables": {
@@ -217,6 +217,13 @@
                 "description": "OSDU Owner Group ACL"
               }
             },
+            "dataDomain": {
+              "type": "string",
+              "defaultValue": "contoso.com",
+              "metadata": {
+                "description": "OSDU ACL Group Domain"
+              }
+            },
             "legalTag": {
               "type": "string",
               "defaultValue": "open-test-data",
@@ -270,6 +277,10 @@
                         {
                           "name": "ACL_OWNER",
                           "value": "[[parameters('ownerGroup')]"
+                        },
+                        {
+                          "name": "DOMAIN",
+                          "value": "[[parameters('dataDomain')]"
                         },
                         {
                           "name": "LEGAL_TAG",
