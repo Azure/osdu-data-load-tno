@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.7.4.23292",
-      "templateHash": "2959755231576491198"
+      "templateHash": "13838057272464342057"
     }
   },
   "variables": {
@@ -193,7 +193,7 @@
             "endpoint": {
               "type": "string",
               "metadata": {
-                "description": "OSDU API Endpoint (FQDN)"
+                "description": "OSDU API Endpoint - Example https://myosdu.energy.azure.com"
               }
             },
             "dataPartition": {
@@ -238,7 +238,7 @@
               }
             },
             "clientSecret": {
-              "type": "string",
+              "type": "securestring",
               "metadata": {
                 "description": "OSDU Client Secret"
               }
@@ -264,7 +264,7 @@
                       "environmentVariables": [
                         {
                           "name": "OSDU_ENDPOINT",
-                          "value": "[[concat('https://'), parameters('endpoint')]"
+                          "value": "[[parameters('endpoint')]"
                         },
                         {
                           "name": "DATA_PARTITION",
