@@ -219,7 +219,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
         'endpoint': {
           'type': 'string'
           'metadata': {
-            'description': 'OSDU API Endpoint (FQDN)'
+            'description': 'OSDU API Endpoint - Example https://myosdu.energy.azure.com'
           }
         }
         'dataPartition': {
@@ -264,7 +264,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
           }
         }
         'clientSecret': {
-          'type': 'string'
+          'type': 'securestring'
           'metadata': {
             'description': 'OSDU Client Secret'
           }
@@ -290,7 +290,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                   'environmentVariables': [
                     {
                       'name': 'OSDU_ENDPOINT'
-                      'value': '[concat(\'https://\'), parameters(\'endpoint\')]'
+                      'value': '[parameters(\'endpoint\')]'
                     }
                     {
                       'name': 'DATA_PARTITION'

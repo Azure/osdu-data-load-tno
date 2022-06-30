@@ -1,5 +1,5 @@
 # docker build --build-arg AZURE_TENANT=$AZURE_TENANT --file Dockerfile --tag osdu-data-load . 
-# docker run -it -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env OSDU_ENDPOINT=https://$NAME.$DOMAIN --env DATA_PARTITION=$NAME-$PARTITION --env LEGAL_TAG=$LEGAL_TAG  --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load
+# docker run -v $(pwd)/open-test-data:/app/open-test-data -v $(pwd)/output:/app/output --env-file .env --env OSDU_ENDPOINT=https://$NAME.$DOMAIN --env DATA_PARTITION=$NAME-$PARTITION --env LEGAL_TAG=$LEGAL_TAG  --env CLIENT_ID=$CLIENT_ID --env CLIENT_SECRET=$CLIENT_SECRET osdu-data-load /app/load.sh
 
 FROM mcr.microsoft.com/mirror/docker/library/ubuntu:20.04 as base
 ARG AZURE_TENANT
@@ -55,4 +55,4 @@ ENV ACL_VIEWER=data.default.viewers
 ENV DOMAIN=contoso.com
 ENV PIP_INSTALL=false
 
-CMD /bin/bash
+CMD /app/load.sh
