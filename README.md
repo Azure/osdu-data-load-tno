@@ -13,8 +13,6 @@ Deploy resources to Azure using this [ARM template](https://github.com/Azure/osd
 
 Estimated Time: 1.5 hours
 
-
-
 __Step 2__
 
 Load data to an OSDU instance by executing the Template Spec created by `Step 1`.
@@ -59,6 +57,9 @@ Required Parameters for Loading an OSDU Instance.
 - Client Secret
 
   The client secret for authentication that has authoriztion to load data.
+
+
+> Cleanup: Logs and state are persisted to the storage account file share `output` which need to be removed prior to starting additional loads.
 
 ## Developer Persona
 
