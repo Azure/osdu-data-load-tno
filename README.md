@@ -21,6 +21,45 @@ Load data to an OSDU instance by executing the Template Spec created by `Step 1`
 
 Estimated Time: 45 minutes
 
+Required Parameters for Loading an OSDU Instance.
+
+- OSDU Endpoint
+
+  The URL where the OSDU API is available.
+  Example: `https://myosdu.contoso.com`
+
+- Data Partition Name
+
+  The name of the OSDU Data Partition where data should be loaded.
+  Example: `myosdu-billing`
+
+- Viewer Group
+
+  The ACL group to be used by the load for data read.
+  Example: `data.default.viewers`
+
+- Owner Group
+
+  The ACL group to be used by the load for data ownership.
+  Example: `data.default.owners`
+
+- Data Domain 
+
+  The domain of the ACL's for data ownership. (Not typically changed)
+  Example: `contoso.com`
+
+- Legal Tag
+
+  The legal tag to be used by the load.
+
+- Client Id
+
+  The client id for authentication that has authorization to load data.
+
+- Client Secret
+
+  The client secret for authentication that has authoriztion to load data.
+
 ## Developer Persona
 
 This method of loading data is intended for engineers wishing to customize control or manually work with data loads.
