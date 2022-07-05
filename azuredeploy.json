@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.8.2.30886",
-      "templateHash": "13082157511934878222"
+      "templateHash": "5569799628482040947"
     }
   },
   "variables": {
@@ -293,6 +293,10 @@
                         {
                           "name": "CLIENT_SECRET",
                           "value": "[[parameters('clientSecret')]"
+                        },
+                        {
+                          "name": "WORKERS",
+                          "value": 50
                         }
                       ],
                       "ports": [],
