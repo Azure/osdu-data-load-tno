@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.7.4.23292",
-      "templateHash": "13838057272464342057"
+      "version": "0.8.2.30886",
+      "templateHash": "13082157511934878222"
     }
   },
   "variables": {
@@ -252,8 +252,8 @@
             {
               "type": "Microsoft.ContainerInstance/containerGroups",
               "apiVersion": "2021-09-01",
-              "name": "[[concat('osdu-data-load-', parameters('endpoint'))]",
-              "location": "[[parameters('location')]",
+              "name": "[[concat('osdu-data-load-', parameters('dataPartition'))]",
+              "location": "[[resourcegroup().location]",
               "properties": {
                 "containers": [
                   {
