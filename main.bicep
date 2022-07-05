@@ -320,6 +320,10 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                       'name': 'CLIENT_SECRET'
                       'value': '[parameters(\'clientSecret\')]'
                     }
+                    {
+                      'name': 'WORKERS'
+                      'value': 50
+                    }
                   ]
                   'ports': []
                   'volumeMounts': [
