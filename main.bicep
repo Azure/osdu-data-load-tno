@@ -278,8 +278,8 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
         {
           'type': 'Microsoft.ContainerInstance/containerGroups'
           'apiVersion': '2021-09-01'
-          'name': '[concat(\'osdu-data-load-\', parameters(\'endpoint\'))]'
-          'location': '[parameters(\'location\')]'
+          'name': '[concat(\'osdu-data-load-\', parameters(\'dataPartition\'))]'
+          'location': '[resourcegroup().location]'
           'properties': {
             'containers': [
               {
