@@ -46,6 +46,9 @@ COPY src src
 COPY .env .env
 COPY setup.py setup.py
 COPY load.sh load.sh
+RUN sudo chown -R app:app src
+RUN sudo chown app:app setup.py
+RUN sudo chown app:app load.sh
 
 # Generate Manifests
 ENV AZURE_TENANT=$AZURE_TENANT
