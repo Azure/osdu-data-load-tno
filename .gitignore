@@ -5,6 +5,7 @@
 
 open-test-data
 open-test-data*
+manifests
 .envrc*
 main.json
 

@@ -37,6 +37,7 @@ done
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PARENT_DIR=`dirname $SCRIPT_DIR`
+MANIFEST_DIR="manifests"
 
 ###############################
 ## FUNCTIONS                 ##
@@ -89,6 +90,7 @@ function ValidateLegalTag() {
 function GenerateManifests() {
   if [ $GENERATE_MANIFEST = true ]; then
     echo "-- Generate Manifests: Start" && _START="$(date +%s)"
+    rm -rf $MANIFEST_DIR 2> /dev/null || true
 
     # Install Manifest Load Python Module
     python3 setup.py install --user
@@ -98,7 +100,7 @@ function GenerateManifests() {
       -m "$SCRIPT_DIR/src/config/tno_ref_data_template_mapping.json" \
       -t "reference_data" \
       -d "reference-data" \
-      -o "output/manifests/reference-manifests" \
+      -o "${MANIFEST_DIR}/reference-manifests" \
       -g true -p "${DATA_PARTITION}"
 
     # Generating misc master data manifests
@@ -106,7 +108,7 @@ function GenerateManifests() {
       -m "$SCRIPT_DIR/src/config/tno_misc_master_data_template_mapping.json" \
       -t "master_data" \
       -d "master-data/Misc_master_data" \
-      -o "output/manifests/misc-master-data-manifests" \
+      -o "${MANIFEST_DIR}/misc-master-data-manifests" \
       -g true -p "${DATA_PARTITION}"
 
     # Generating master well data manifests
@@ -114,7 +116,7 @@ function GenerateManifests() {
       -m "$SCRIPT_DIR/src/config/tno_well_data_template_mapping.json" \
       -t "master_data" \
       -d "master-data/Well" \
-      -o "output/manifests/master-well-data-manifests" \
+      -o "${MANIFEST_DIR}/master-well-data-manifests" \
       -p "${DATA_PARTITION}"
 
     # Generating master wellbore data manifests
@@ -122,7 +124,7 @@ function GenerateManifests() {
       -m "$SCRIPT_DIR/src/config/tno_wellbore_data_template_mapping.json" \
       -t "master_data" \
       -d "master-data/Wellbore" \
-      -o "output/manifests/master-wellbore-data-manifests" \
+      -o "${MANIFEST_DIR}/master-wellbore-data-manifests" \
       -p "${DATA_PARTITION}"
 
     echo "-- Generate Manifest: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
@@ -138,7 +140,7 @@ function LoadMasterData() {
     # Manifest Ingest Reference
     echo "-- Reference Data: Start" && _START="$(date +%s)"
     python3 $SCRIPT_DIR/src/data_load/load.py ingest \
-      --dir $SCRIPT_DIR/output/manifests/reference-manifests \
+      --dir $MANIFEST_DIR/reference-manifests \
       --batch $BATCH_SIZE
     python3 $SCRIPT_DIR/src/data_load/load.py status --wait
     echo "-- Reference Data: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
@@ -146,7 +148,7 @@ function LoadMasterData() {
     # Manifest Ingest Misc Master
     echo "-- Misc Master Data: Start" && _START="$(date +%s)"
     python3 $SCRIPT_DIR/src/data_load/load.py ingest \
-      --dir $SCRIPT_DIR/output/manifests/misc-master-data-manifests \
+      --dir $MANIFEST_DIR/misc-master-data-manifests \
       --batch $BATCH_SIZE
     python3 $SCRIPT_DIR/src/data_load/load.py status --wait
     echo "-- Misc Master Data: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
@@ -154,7 +156,7 @@ function LoadMasterData() {
     # Manifest Ingest Master Well
     echo "-- Master Well Data: Start" && _START="$(date +%s)"
     python3 $SCRIPT_DIR/src/data_load/load.py ingest \
-      --dir $SCRIPT_DIR/output/manifests/master-well-data-manifests \
+      --dir $MANIFEST_DIR/master-well-data-manifests \
       --batch $BATCH_SIZE
     python3 $SCRIPT_DIR/src/data_load/load.py status --wait
     echo "-- Master Well Data: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
@@ -166,6 +168,7 @@ function LoadMasterData() {
 function LoadFiles() {
   if [ $LOAD_FILES = true ]; then
     echo "Loading File Data"
+    rm $SCRIPT_DIR/output/*.json 2> /dev/null || true
 
     # File Ingest Documents
     echo "-- WPC Documents: Start" && _START="$(date +%s)"
@@ -257,6 +260,7 @@ printf "\n"
 echo "=================================================================="
 echo "Initializing"
 echo "=================================================================="
+rm $SCRIPT_DIR/output/*.log 2> /dev/null || true
 InstallRequirements;
 ConfigureIni;
 ValidateLegalTag;
