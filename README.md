@@ -3,7 +3,9 @@
 
 ## Operations Persona
 
-This method of loading data provides a way to load data using ARM templates. The solution leverages a cloud based container to execute a data load using data hosted in an Azure Storage Account file share.  To load data follow the 2 step process.
+This method of loading data provides a way to load data using ARM templates. The solution leverages a cloud based container to execute a data load using data hosted in an Azure Storage Account file share. To load data follow the 2 step process.
+
+> The ingested TNO data is OSDU M10 specific. If you need to load a different TNO data set (e.g. [M8](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/tree/Azure/M8)), you should use the [Developer Persona](#developer-persona).
 
 __Step 1__
 
@@ -65,7 +67,7 @@ Required Parameters for Loading an OSDU Instance.
 
 This method of loading data is intended for engineers wishing to customize control or manually work with data loads.
 
-This solution supports [GitHub Codespaces](https://github.com/features/codespaces) as preferred, however [VSCode Remote containers](https://code.visualstudio.com/docs/remote/containers) can be utilized assuming the host machine has enough resources allocated to Docker.  A custom container will be built with a post container build hook that will download the [open-test-data](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data) from OSDU and copy files into a custom directory structure for the ingestion scripts to process.
+This solution supports [GitHub Codespaces](https://github.com/features/codespaces) as preferred, however [VSCode Remote containers](https://code.visualstudio.com/docs/remote/containers) can be utilized assuming the host machine has enough resources allocated to Docker.  A custom container will be built with a post container build hook that will download the [open-test-data](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data) from OSDU and copy files into a custom directory structure for the ingestion scripts to process. The downloaded TNO data is M10 specific, but it can be adjusted to work with other OSDU milestones (e.g. [M8](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/tree/Azure/M8)) by modifying the data download URL and data extraction steps in [on-create.sh](./.devcontainer/on-create.sh).
 
 __Environment Variables__
 
@@ -158,24 +160,32 @@ __Files – 12,786__
 | 9        |  Documents     |  pdf/txt |
 
 
-__Manifests – 12,563__
+__Manifests – 12,570__
 
 | Count   | Manfiest Type                      |
 | :------ |:---------------------------------- |
-| 92      |  Reference Data                    |
+| 98      |  Reference Data                    |
 | 422     |  Master Data Fields                |
 | 406     |  Master Data Geopolitical Entities |
 | 213     |  Master Data Organisation          |
-| 4946    |  Master Data Wells                 |
+| 4947    |  Master Data Wells                 |
 | 6484    |  Master Data Wellbores             |
 
+__Work Product Components – 12,785__
 
-__92 Reference Data Manifests are loaded__
+| Count   | Manfiest Type                      |
+| :------ |:---------------------------------- |
+| 9       |  Documents                         |
+| 929     |  Well logs                         |
+| 5904    |  Wellbore Marker Sets              |
+| 5943    |  Wellbore Trajectories             |
+
+__98 Reference Data Manifests are loaded__
 ```
 Key                                                            Count
 -------------------------------------------------------------  -------
 osdu:wks:reference-data--AliasNameType:1.0.0                   5
-osdu:wks:reference-data--CoordinateReferenceSystem:1.0.0       3
+osdu:wks:reference-data--CoordinateReferenceSystem:1.0.0       8
 osdu:wks:reference-data--DrillingReasonType:1.0.0              16
 osdu:wks:reference-data--FacilityEventType:1.0.0               3
 osdu:wks:reference-data--FacilityStateType:1.0.0               10
@@ -185,13 +195,13 @@ osdu:wks:reference-data--MaterialType:1.0.0                    15
 osdu:wks:reference-data--OperatingEnvironment:1.0.0            2
 osdu:wks:reference-data--ResourceSecurityClassification:1.0.0  1
 osdu:wks:reference-data--SchemaFormatType:1.0.0                3
-osdu:wks:reference-data--UnitOfMeasure:1.0.0                   8
+osdu:wks:reference-data--UnitOfMeasure:1.0.0                   9
 osdu:wks:reference-data--VerticalMeasurementPath:1.0.0         5
 osdu:wks:reference-data--VerticalMeasurementType:1.0.0         10
 osdu:wks:reference-data--WellboreTrajectoryType:1.0.0          3
 ```
 
-__5,988 Manifests are loaded__
+__12,472 Manifests are loaded__
 ```
 Key                                                            Count
 -------------------------------------------------------------  -------
@@ -199,6 +209,18 @@ osdu:wks:master-data--Field:1.0.0                              422
 osdu:wks:master-data--GeoPoliticalEntity:1.0.0                 406
 osdu:wks:master-data--Organisation:1.0.0                       213
 osdu:wks:master-data--Well:1.0.0                               4947
+osdu:wks:master-data--Wellbore:1.0.0                           6484
+```
+
+__12,785 Work Product Components are loaded__
+```
+Key                                                            Count
+-------------------------------------------------------------  -------
+osdu:wks:work-product-component--Document:1.0.0                9
+osdu:wks:work-product-component--WellLog:1.0.0                 929
+osdu:wks:work-product-component--WellboreMarkerSet:1.0.0       5904
+osdu:wks:work-product-component--WellboreTrajectory:1.0.0      5943
+
 ```
 
 # Overview of File Ingestion
