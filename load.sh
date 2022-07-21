@@ -160,6 +160,14 @@ function LoadMasterData() {
       --batch $BATCH_SIZE
     python3 $SCRIPT_DIR/src/data_load/load.py status --wait
     echo "-- Master Well Data: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
+
+    # Manifest Ingest Master Wellbore
+    echo "-- Master Wellbore Data: Start" && _START="$(date +%s)"
+    python3 $SCRIPT_DIR/src/data_load/load.py ingest \
+      --dir $MANIFEST_DIR/master-wellbore-data-manifests \
+      --batch $BATCH_SIZE
+    python3 $SCRIPT_DIR/src/data_load/load.py status --wait
+    echo "-- Master Wellbore Data: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
   else
     echo "Load Master Data - Bypassed"
     echo "-----"
