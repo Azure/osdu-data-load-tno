@@ -171,6 +171,14 @@ __Manifests – 12,570__
 | 4947    |  Master Data Wells                 |
 | 6484    |  Master Data Wellbores             |
 
+__Work Product Components – 12,785__
+
+| Count   | Manfiest Type                      |
+| :------ |:---------------------------------- |
+| 9       |  Documents                         |
+| 929     |  Well logs                         |
+| 5904    |  Wellbore Marker Sets              |
+| 5943    |  Wellbore Trajectories             |
 
 __98 Reference Data Manifests are loaded__
 ```
@@ -202,6 +210,17 @@ osdu:wks:master-data--GeoPoliticalEntity:1.0.0                 406
 osdu:wks:master-data--Organisation:1.0.0                       213
 osdu:wks:master-data--Well:1.0.0                               4947
 osdu:wks:master-data--Wellbore:1.0.0                           6484
+```
+
+__12,785 Work Product Components are loaded__
+```
+Key                                                            Count
+-------------------------------------------------------------  -------
+osdu:wks:work-product-component--Document:1.0.0                9
+osdu:wks:work-product-component--WellLog:1.0.0                 929
+osdu:wks:work-product-component--WellboreMarkerSet:1.0.0       5904
+osdu:wks:work-product-component--WellboreTrajectory:1.0.0      5943
+
 ```
 
 # Overview of File Ingestion
