@@ -164,7 +164,7 @@ __Manifests – 12,570__
 
 | Count   | Manfiest Type                      |
 | :------ |:---------------------------------- |
-| 98      |  Reference Data                    |
+| 92      |  Reference Data                    |
 | 422     |  Master Data Fields                |
 | 406     |  Master Data Geopolitical Entities |
 | 213     |  Master Data Organisation          |
@@ -185,7 +185,7 @@ __98 Reference Data Manifests are loaded__
 Key                                                            Count
 -------------------------------------------------------------  -------
 osdu:wks:reference-data--AliasNameType:1.0.0                   5
-osdu:wks:reference-data--CoordinateReferenceSystem:1.0.0       8
+osdu:wks:reference-data--CoordinateReferenceSystem:1.0.0       3
 osdu:wks:reference-data--DrillingReasonType:1.0.0              16
 osdu:wks:reference-data--FacilityEventType:1.0.0               3
 osdu:wks:reference-data--FacilityStateType:1.0.0               10
@@ -195,7 +195,7 @@ osdu:wks:reference-data--MaterialType:1.0.0                    15
 osdu:wks:reference-data--OperatingEnvironment:1.0.0            2
 osdu:wks:reference-data--ResourceSecurityClassification:1.0.0  1
 osdu:wks:reference-data--SchemaFormatType:1.0.0                3
-osdu:wks:reference-data--UnitOfMeasure:1.0.0                   9
+osdu:wks:reference-data--UnitOfMeasure:1.0.0                   8
 osdu:wks:reference-data--VerticalMeasurementPath:1.0.0         5
 osdu:wks:reference-data--VerticalMeasurementType:1.0.0         10
 osdu:wks:reference-data--WellboreTrajectoryType:1.0.0          3
