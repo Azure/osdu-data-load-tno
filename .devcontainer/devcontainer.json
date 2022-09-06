@@ -56,7 +56,7 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "workspaceFolder": "/workspace",
   "containerEnv": {
-    "DOMAIN": "contoso.com",
+    "DOMAIN": "dataservices.energy",
     "ACL_OWNER": "data.default.owners",
     "ACL_VIEWER": "data.default.viewers"
   },
