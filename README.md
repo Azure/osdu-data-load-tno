@@ -5,7 +5,7 @@
 
 This method of loading data provides a way to load data using ARM templates. The solution leverages a cloud based container to execute a data load using data hosted in an Azure Storage Account file share. To load data follow the 2 step process.
 
-> The ingested TNO data is OSDU M10 specific. If you need to load a different TNO data set (e.g. [M8](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/tree/Azure/M8)), you should use the [Developer Persona](#developer-persona).
+> The ingested TNO data is OSDU<sup>TM</sup> M10 specific. If you need to load a different TNO data set (e.g. [M8](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/tree/Azure/M8)), you should use the [Developer Persona](#developer-persona).
 
 __Step 1__
 
@@ -655,3 +655,5 @@ trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
+
+OSDU is a trademark of The Open Group.
