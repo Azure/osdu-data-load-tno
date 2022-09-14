@@ -269,6 +269,19 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
             'description': 'OSDU Client Secret'
           }
         }
+        'logLevel': {
+          'type': 'string'
+          'defaultValue': 'INFO'
+          'allowedValues': [
+            'DEBUG'
+            'INFO'
+            'WARN'
+            'ERROR'
+          ]
+          'metadata': {
+            'description': 'Log level for data load'
+          }
+        }
       }
       'variables': {
         'acrName': acrName
@@ -323,6 +336,10 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                     {
                       'name': 'WORKERS'
                       'value': 50
+                    }
+                    {
+                      'name': 'LOG_LEVEL'
+                      'value': '[parameters(\'logLevel\')]'
                     }
                   ]
                   'ports': []
