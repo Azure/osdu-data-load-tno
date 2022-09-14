@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.9.1.41621",
-      "templateHash": "11294990376655437829"
+      "version": "0.10.61.36676",
+      "templateHash": "6870115752305067695"
     }
   },
   "variables": {
@@ -242,6 +242,19 @@
               "metadata": {
                 "description": "OSDU Client Secret"
               }
+            },
+            "logLevel": {
+              "type": "string",
+              "defaultValue": "INFO",
+              "allowedValues": [
+                "DEBUG",
+                "INFO",
+                "WARN",
+                "ERROR"
+              ],
+              "metadata": {
+                "description": "Log level for data load"
+              }
             }
           },
           "variables": {
@@ -297,6 +310,10 @@
                         {
                           "name": "WORKERS",
                           "value": 50
+                        },
+                        {
+                          "name": "LOG_LEVEL",
+                          "value": "[[parameters('logLevel')]"
                         }
                       ],
                       "ports": [],
