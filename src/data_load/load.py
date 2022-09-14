@@ -122,8 +122,8 @@ BAD_TOKEN_RESPONSE_CODES = [400, 401, 403, 500]
 
 def requests_retry_session(
     retries=5,
-    backoff_factor=1.0,
-    status_forcelist=(404, 500, 502, 503, 504),
+    backoff_factor=1.5,
+    status_forcelist=(404, 429, 500, 502, 503, 504),
     method_whitelist=["GET", "PUT", "POST", "DELETE"],
     session=None,
 ):
