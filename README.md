@@ -43,10 +43,10 @@ Required Parameters for Loading an OSDU Instance.
   The ACL group to be used by the load for data ownership.
   Example: `data.default.owners`
 
-- Data Domain 
+- Data Domain
 
   The domain of the ACL's for data ownership. (Not typically changed)
-  Example: `contoso.com`
+  Example: `dataservices.energy`
 
 - Legal Tag
 
@@ -286,10 +286,10 @@ data-partition-id: {{DATA_PARTITION}}
     "kind": "osdu:wks:dataset--File.Generic:1.0.0",
     "acl": {
         "viewers": [
-            "data.default.viewers@{{DATA_PARTITION}}.contoso.com"
+            "data.default.viewers@{{DATA_PARTITION}}.dataservices.energy"
         ],
         "owners": [
-            "data.default.viewers@{{DATA_PARTITION}}.contoso.com"
+            "data.default.viewers@{{DATA_PARTITION}}.dataservices.energy"
         ]
     },
     "legal": {
@@ -607,10 +607,10 @@ _Sample Manifest Ingestion Submission_
           "kind": "osdu:wks:reference-data--AliasNameType:1.0.0",
           "acl": {
             "viewers": [
-              "data.default.viewers@{{DATA_PARTITION}}.contoso.com"
+              "data.default.viewers@{{DATA_PARTITION}}.dataservices.energy"
             ],
             "owners": [
-              "data.default.owners@{{DATA_PARTITION}}.contoso.com"
+              "data.default.owners@{{DATA_PARTITION}}.dataservices.energy"
             ]
           },
           "legal": {

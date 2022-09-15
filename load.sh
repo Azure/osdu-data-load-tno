@@ -26,7 +26,7 @@ else
   DATA_PARTITION=$1
 fi
 
-if [ -z $DATA_DOMAIN ]; then DATA_DOMAIN='contoso.com'; fi
+if [ -z $DATA_DOMAIN ]; then DATA_DOMAIN='dataservices.energy'; fi
 
 while getopts p: flag
 do

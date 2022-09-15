@@ -219,7 +219,7 @@
             },
             "dataDomain": {
               "type": "string",
-              "defaultValue": "contoso.com",
+              "defaultValue": "dataservices.energy",
               "metadata": {
                 "description": "OSDU ACL Group Domain"
               }

@@ -123,12 +123,12 @@ resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-0
       tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/trajectories
       echo -e "Extracted Dataset Trajectories" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/well-logs   
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/well-logs
       echo -e "Extracted Dataset Well Logs" 2>&1 | tee -a $LOG
 
       tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/3-schema
       echo -e "Extracted Schemas" 2>&1 | tee -a $LOG
-      
+
       tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/5-templates
       echo -e "Extracted Templates" 2>&1 | tee -a $LOG
 
@@ -245,7 +245,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
         }
         'dataDomain': {
           'type': 'string'
-          'defaultValue': 'contoso.com'
+          'defaultValue': 'dataservices.energy'
           'metadata': {
             'description': 'OSDU ACL Group Domain'
           }
