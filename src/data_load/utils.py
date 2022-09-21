@@ -95,7 +95,10 @@ class TokenManager:
         for i in range(cls._retries):
             # try several times if there any error
             try:
-                resp = cls.login_with_service_principal_creds(cls._token_endpoint, cls._client_id, cls._client_secret)
+                if environ.get('REFRESH_TOKEN') is not None:
+                    resp = cls.refresh_request(cls._token_endpoint, environ.get('REFRESH_TOKEN'), cls._client_id, cls._client_secret)
+                else:
+                    resp = cls.login_with_service_principal_creds(cls._token_endpoint, cls._client_id, cls._client_secret)
 
                 if 'access_token' in resp:
                     break
