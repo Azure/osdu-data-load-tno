@@ -257,8 +257,15 @@ def verify_references(dir_name, batch_size=20, ingestion_sequence=""):
 
 def verify_ingestion(dir_name, batch_size=1):
     # Recursive traversal of files and subdirectories of the root directory and files processing
+
     success = []
     failed = []
+
+    reference_pattern = "{}:reference-data".format(config.get("CONNECTION", "data-partition-id"))
+    master_pattern = "{}:master-data".format(config.get("CONNECTION", "data-partition-id"))
+    sleep_after_count = 1000
+    queries_made = 0
+
     for root, _, files in os.walk(dir_name):
         logger.debug(f"Files list: {files}")
         cur_batch = 0
@@ -290,13 +297,13 @@ def verify_ingestion(dir_name, batch_size=1):
                                                               get_directory_name(filepath))
                     record_ids.append(work_product_id)
                 else:
-                    record_ids.append(ingested_datum.get("id"))
+                    record_ids.append(ingested_datum.get("id").replace('osdu:reference-data', reference_pattern).replace('osdu:master-data', master_pattern))
                 cur_batch += 1
 
             elif isinstance(ingested_data, list):
                 for ingested_datum in ingested_data:
                     if "id" in ingested_datum:
-                        record_ids.append(reference_data_id(ingested_datum))
+                        record_ids.append(reference_data_id(ingested_datum, reference_pattern, master_pattern))
                         cur_batch += 1
 
             if cur_batch >= batch_size:
@@ -304,6 +311,11 @@ def verify_ingestion(dir_name, batch_size=1):
                 s, f = verify_ids(record_ids)
                 success += s
                 failed += f
+                queries_made = queries_made + cur_batch
+                if queries_made >= sleep_after_count:
+                    time.sleep(60)
+                    queries_made = 0
+
                 cur_batch = 0
                 record_ids = []
             else:
@@ -316,6 +328,10 @@ def verify_ingestion(dir_name, batch_size=1):
             s, f = verify_ids(record_ids)
             success += s
             failed += f
+            queries_made = queries_made + cur_batch
+            if queries_made >= sleep_after_count:
+                time.sleep(60)
+                queries_made = 0
 
     return success, failed
 
@@ -665,12 +681,16 @@ def status_check():
                     RUN_ID: run_id,
                     STATUS: status})
             else:
-                time_taken = workflow_status.get(END_TIME) - workflow_status.get(START_TIME)
+                start_time = workflow_status.get(START_TIME)
+                end_time = workflow_status.get(END_TIME)
+                time_taken = -1000
+                if start_time is not None and end_time is not None:
+                    time_taken = end_time - start_time
                 logger.info(f"Workflow {status}: {run_id}")
                 results.append({
                     RUN_ID: run_id,
-                    END_TIME: workflow_status.get(END_TIME),
-                    START_TIME: workflow_status.get(START_TIME),
+                    END_TIME: end_time,
+                    START_TIME: start_time,
                     STATUS: status,
                     TIME_TAKEN: time_taken / 1000})
         else:
@@ -693,7 +713,7 @@ def send_status_check_request(run_id):
         return workflow_response
     else:
         reason = response.text[:250]
-        logger.error(f"Request error for {headers.get('correation-id')}")
+        logger.error(f"Request error for {headers.get('correlation-id')}")
         logger.error(f"Response status: {response.status_code}. "
                      f"Response content: {reason}.")
         return None
@@ -754,20 +774,31 @@ def generate_workproduct_id(file_name, base_dir):
                                                        base_dir, file_name)
 
 
-def reference_data_id(datum):
-    return str.replace(datum["id"], "{{NAMESPACE}}", config.get("CONNECTION", "data-partition-id"))
+def reference_data_id(datum, reference_pattern = None, master_pattern = None):
+    string = str.replace(datum["id"], "{{NAMESPACE}}", config.get("CONNECTION", "data-partition-id"))
+    if reference_pattern is not None:
+        string = string.replace('osdu:reference-data', reference_pattern)
+    if master_pattern is not None:    
+        string = string.replace('osdu:master-data', master_pattern)
+    return string
 
 
 def update_reference_data_metadata(data, is_standard_reference):
+    reference_pattern = "{}:reference-data".format(config.get("CONNECTION", "data-partition-id"))
+    master_pattern = "{}:master-data".format(config.get("CONNECTION", "data-partition-id"))
     for datum in data:
         if "id" in datum:
-            datum["id"] = reference_data_id(datum)
+            datum["id"] = reference_data_id(datum, reference_pattern, master_pattern)
         update_legal_and_acl_tags(datum)
     return data
 
 
 def add_metadata(data):
+    reference_pattern = "{}:reference-data".format(config.get("CONNECTION", "data-partition-id"))
+    master_pattern = "{}:master-data".format(config.get("CONNECTION", "data-partition-id"))
     for datum in data:
+        if "id" in datum:
+            datum["id"] = datum["id"].replace('osdu:reference-data', reference_pattern).replace('osdu:master-data', master_pattern)
         update_legal_and_acl_tags(datum)
     return data
 
@@ -882,9 +913,9 @@ def compute_reports(reports_file):
         computed_baseline.append({
             "data_type": ingestion_name,
             "time_taken_in_minutes": (max_end_time - min_start_time) / (60 * 1000),
-            "successful_ingestions": len(success),
-            "failed_ingestions": len(failed),
-            "incomplete_ingestions": len(incomplete),
+            "ingestion_runs_successful": len(success),
+            "ingestion_runs_failed": len(failed),
+            "ingestion_runs_incomplete": len(incomplete),
             "avg_time_taken_per_dag_run_in_seconds": average_time_taken
         })
 

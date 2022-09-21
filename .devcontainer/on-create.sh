@@ -22,27 +22,27 @@ cd $PARENT_DIR
 
 if [ ! -d "$PARENT_DIR/open-test-data" ]
 then
-    wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M10/open-test-data-Azure-M10.tar.gz
+    wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M12-tno-loading-pipelines/open-test-data-Azure-M12-tno-loading-pipelines.tar.gz
 
     # Copy File Data
     mkdir -p $PARENT_DIR/open-test-data/datasets/documents && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/documents --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/USGS_docs
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/documents --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/USGS_docs
     mkdir -p $PARENT_DIR/open-test-data/datasets/markers && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/markers --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/markers
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/markers --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/markers
     mkdir -p $PARENT_DIR/open-test-data/datasets/trajectories && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/trajectories --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/trajectories
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/trajectories --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/trajectories
     mkdir -p $PARENT_DIR/open-test-data/datasets/well-logs && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/well-logs --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/well-logs
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/datasets/well-logs --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/well-logs
 
     # Copy Manifest Data
     mkdir -p $PARENT_DIR/open-test-data/schema && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/schema --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/3-schema
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/schema --strip-components=3 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/3-schema
     mkdir -p $PARENT_DIR/open-test-data/templates && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/templates --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/5-templates
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/templates --strip-components=3 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/5-templates
     mkdir -p $PARENT_DIR/open-test-data/TNO/contrib && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/TNO/contrib --strip-components=5 open-test-data-Azure-M10/rc--3.0.0/1-data/3-provided/TNO
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/TNO/contrib --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/1-data/3-provided/TNO
     mkdir -p $PARENT_DIR/open-test-data/TNO/provided && \
-        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/TNO/provided --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/4-instances/TNO
+        tar -xzvf $FILE_NAME -C $PARENT_DIR/open-test-data/TNO/provided --strip-components=3 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/4-instances/TNO
 
     rm $FILE_NAME
 fi
