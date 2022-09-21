@@ -1,6 +1,5 @@
 # osdu-data-load-tno
 
-
 ## Operations Persona
 
 This method of loading data provides a way to load data using ARM templates. The solution leverages a cloud based container to execute a data load using data hosted in an Azure Storage Account file share. To load data follow the 2 step process.
@@ -20,6 +19,8 @@ __Step 2__
 Load data to an OSDU instance by executing the Template Spec created by `Step 1`.
 
 Estimated Time: 45 minutes
+
+A container instance will be created in the same resource group. You can check its logs to monitor progress. Additional logs and state will be present in the created storage account's `output` file share. Once the container stops execution (enters a terminated state) the data load is complete and you can review the container logs and file share logs for output details. The main log is the `dataloader-datestamp.log` file.
 
 Required Parameters for Loading an OSDU Instance.
 
@@ -58,10 +59,9 @@ Required Parameters for Loading an OSDU Instance.
 
 - Client Secret
 
-  The client secret for authentication that has authoriztion to load data.
+  The client secret for authentication that has authorization to load data.
 
-
-> Cleanup: Logs and state are persisted to the storage account file share `output` which need to be removed prior to starting additional loads.
+> Cleanup: Logs and state are persisted to the storage account in the created resource group. The `output` file share needs to be removed prior to starting additional loads.
 
 ## Developer Persona
 
@@ -159,7 +159,6 @@ __Files – 12,786__
 | 929      |  Well Logs     |      csv |
 | 9        |  Documents     |  pdf/txt |
 
-
 __Manifests – 12,570__
 
 | Count   | Manfiest Type                      |
@@ -181,6 +180,7 @@ __Work Product Components – 12,785__
 | 5943    |  Wellbore Trajectories             |
 
 __98 Reference Data Manifests are loaded__
+
 ```
 Key                                                            Count
 -------------------------------------------------------------  -------
@@ -230,7 +230,6 @@ Loading files into the data platform using the Core API is a multi step process 
 __Dataset transfer over moderate to high network bandwidth__
 ![bandwidth](./diagrams/bandwidth.png)
 
-
 File ingestion executes the following actions in the platform.
 
 ![ingest sequence](./diagrams/fileingest.png)
@@ -252,7 +251,6 @@ data-partition-id: {{DATA_PARTITION}}
 @FILE_URL = {{uploadURL.response.body.Location.SignedURL}}
 @FILE_SOURCE = {{uploadURL.response.body.Location.FileSource}}
 ```
-
 
 __Write the data to the blob__
 
@@ -322,7 +320,6 @@ __Record Indexing__
 
 The ingestion of a file will always trigger a message is processed to index the data to be retrieved later by search.
 
-
 ## Python Script File Ingestion
 
 A python script is used to execute data load activities and can be used to load a directory of files.
@@ -350,8 +347,8 @@ method_whitelist=["GET", "PUT", "POST", "DELETE"]
 
 To orchestrate the activities of loading files for a specific dataset a simple bash script is used which controls and sequences specific directories containing files to load as well as where the results should be written.  Keeping track of the ingested file identifiers becomes important to later load the Work Product Component manifests.
 
-
 _Sample Bash Blocks_
+
 ```bash
   # File Ingest Documents
   echo "-- WPC Documents: Start" && _START="$(date +%s)"
@@ -370,6 +367,7 @@ To load a manifest into the system the following actions are performed.
 Manifests exist as default templates that have a generic `id` with an empty `acl` and `legal` attribute.  Below you will find a few sample manifests that can be used to help understand the format.
 
 _Sample Alais Manifest_
+
 ```json
 {
   "kind": "osdu:wks:Manifest:1.0.0",
@@ -396,6 +394,7 @@ _Sample Alais Manifest_
 ```
 
 _Sample Field Manifest_
+
 ```json
 {
   "kind": "osdu:wks:Manifest:1.0.0",

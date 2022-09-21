@@ -252,7 +252,6 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
         }
         'legalTag': {
           'type': 'string'
-          'defaultValue': 'open-test-data'
           'metadata': {
             'description': 'OSDU Legal Tag Name'
           }
