@@ -100,7 +100,7 @@ resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-0
       DATA_DIR="/tmp/${AZURE_STORAGE_SHARE}"
 
       echo -e "Retrieving data from OSDU..." 2>&1 | tee -a $LOG
-      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M10/open-test-data-Azure-M10.tar.gz 2>&1 | tee -a $LOG
+      wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/Azure/M12-tno-loading-pipelines/open-test-data-Azure-M12-tno-loading-pipelines.tar.gz 2>&1 | tee -a $LOG
 
       # Create Directory structure
       echo -e "Creating Directory structure..." 2>&1 | tee -a $LOG
@@ -114,28 +114,28 @@ resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-0
       mkdir -p $DATA_DIR/TNO/provided
       ls -l $DATA_DIR | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/USGS_docs
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/documents --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/USGS_docs
       echo -e "Extracted Dataset Documents" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/markers
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/markers --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/markers
       echo -e "Extracted Dataset Markers" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/trajectories
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/trajectories --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/trajectories
       echo -e "Extracted Dataset Trajectories" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M10/rc--1.0.0/1-data/3-provided/well-logs
+      tar -xzvf $FILE_NAME -C $DATA_DIR/datasets/well-logs --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--1.0.0/1-data/3-provided/well-logs
       echo -e "Extracted Dataset Well Logs" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/3-schema
+      tar -xzvf $FILE_NAME -C $DATA_DIR/schema --strip-components=3 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/3-schema
       echo -e "Extracted Schemas" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/5-templates
+      tar -xzvf $FILE_NAME -C $DATA_DIR/templates --strip-components=3 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/5-templates
       echo -e "Extracted Templates" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M10/rc--3.0.0/1-data/3-provided/TNO
+      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/contrib --strip-components=5 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/1-data/3-provided/TNO
       echo -e "Extracted TNO Contrib" 2>&1 | tee -a $LOG
 
-      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M10/rc--3.0.0/4-instances/TNO
+      tar -xzvf $FILE_NAME -C $DATA_DIR/TNO/provided --strip-components=3 open-test-data-Azure-M12-tno-loading-pipelines/rc--3.0.0/4-instances/TNO
       echo -e "Extracted TNO Provided" 2>&1 | tee -a $LOG
 
       # Upload to Azure Storage
