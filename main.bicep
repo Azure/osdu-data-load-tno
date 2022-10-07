@@ -20,6 +20,9 @@ resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
     name: 'Standard_LRS'
   }
   kind: 'StorageV2'
+  properties: {
+    allowBlobPublicAccess: false
+  }
 
   resource fileService 'fileServices' = {
     name: 'default'
