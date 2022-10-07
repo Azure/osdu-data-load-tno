@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.10.61.36676",
-      "templateHash": "209599647758858211"
+      "version": "0.11.1.770",
+      "templateHash": "4489212888523995815"
     }
   },
   "variables": {
@@ -109,7 +109,7 @@
       },
       "properties": {
         "azCliVersion": "2.37.0",
-        "timeout": "PT2H",
+        "timeout": "PT3H",
         "retentionInterval": "PT1H",
         "cleanupPreference": "OnSuccess",
         "environmentVariables": [
