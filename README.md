@@ -12,7 +12,7 @@ Deploy resources to Azure using this [ARM template](https://github.com/Azure/osd
 
 [![Load from Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fosdu-data-load-tno%2Fmain%2Fazuredeploy.json)
 
-Estimated Time: 1.5 hours
+Estimated Time: 1.5-2 hours
 
 __Step 2__
 
