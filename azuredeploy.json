@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.11.1.770",
-      "templateHash": "14305390807217098194"
+      "templateHash": "17520914497610486333"
     }
   },
   "variables": {
@@ -58,7 +58,10 @@
       "sku": {
         "name": "Standard_LRS"
       },
-      "kind": "StorageV2"
+      "kind": "StorageV2",
+      "properties": {
+        "allowBlobPublicAccess": false
+      }
     },
     {
       "type": "Microsoft.ContainerRegistry/registries",
