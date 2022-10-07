@@ -330,7 +330,7 @@ resource createTemplateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2
                     }
                     {
                       'name': 'CLIENT_SECRET'
-                      'value': '[parameters(\'clientSecret\')]'
+                      'secureValue': '[parameters(\'clientSecret\')]'
                     }
                     {
                       'name': 'WORKERS'
