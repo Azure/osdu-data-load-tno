@@ -51,7 +51,7 @@ Required Parameters for Loading an OSDU Instance.
 
 - Legal Tag
 
-  The legal tag to be used by the load.
+  The legal tag to be used by the load in `{DATA_PARTITION}-{TAG_NAME}` format
 
 - Client Id
 
