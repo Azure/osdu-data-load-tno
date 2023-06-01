@@ -124,7 +124,7 @@ def requests_retry_session(
     retries=5,
     backoff_factor=1.5,
     status_forcelist=(404, 429, 500, 502, 503, 504),
-    method_whitelist=["GET", "PUT", "POST", "DELETE"],
+    allowed_methods=["GET", "PUT", "POST", "DELETE"],
     session=None,
 ):
     session = session or requests.Session()
@@ -134,7 +134,7 @@ def requests_retry_session(
         connect=retries,
         backoff_factor=backoff_factor,
         status_forcelist=status_forcelist,
-        method_whitelist=method_whitelist,
+        allowed_methods=allowed_methods,
     )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
