@@ -104,7 +104,7 @@ resource uploadDeploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-0
 
       echo -e "Retrieving data from OSDU..." 2>&1 | tee -a $LOG
       wget -O $FILE_NAME https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/archive/v0.17.0/open-test-data-v0.17.0.tar.gz 2>&1 | tee -a $LOG
-                         
+           
       # Create Directory structure
       echo -e "Creating Directory structure..." 2>&1 | tee -a $LOG
       mkdir -p $DATA_DIR/datasets/documents
