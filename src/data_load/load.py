@@ -470,12 +470,12 @@ def load_single_file(session, root, file):
         #####################
         metadata_body = json.dumps(
             populate_file_metadata(file_source, file, dir_name))
-        metadata_response = session.post(
+        metadata_response = session.post( ####### FAILING!
             FILE_URL + "/files/metadata", metadata_body, headers=headers)
-
+        logger.info(f"Metadata Body for {filepath} : {metadata_body}")
         if metadata_response.status_code != 201:
             logger.error(
-                f"/files/metadata failed for {filepath} with response {metadata_response}")
+                f"/files/metadata failed for {filepath} with response {metadata_response.status_code} and body {metadata_response.text}")
             return FILE_UPLOAD_FAILED, filepath
 
         #####################
