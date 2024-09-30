@@ -655,7 +655,7 @@ def manifest_ingest(is_wpc, cur_batch, data_objects, data_type): #kym
     cur_batch = 0
     batch_size = 5
     batch_objects = []
-    logger.debug("Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {batch_size}")
+    logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {batch_size}")
     for i, data_object in enumerate(data_objects):
         logger.debug(f"Manifest Ingestion - Current batch size {cur_batch}")
         batch_objects.append(data_object)
