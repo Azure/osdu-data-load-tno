@@ -7,7 +7,7 @@
 usage() { echo "Usage: load.sh <data_partition>" 1>&2; exit 1; }
 
 if [ -z $LOG_LEVEL ]; then LOG_LEVEL="info"; fi
-if [ -z $BATCH_SIZE ]; then BATCH_SIZE=100; fi
+if [ -z $BATCH_SIZE ]; then BATCH_SIZE=25; fi
 if [ -z $PIP_INSTALL ]; then PIP_INSTALL=true; else if [ $PIP_INSTALL != false ]; then PIP_INSTALL=true; fi fi
 if [ -z $CONFIGURE_INI ]; then CONFIGURE_INI=true; else if [ $CONFIGURE_INI != false ]; then CONFIGURE_INI=true; fi fi
 if [ -z $CHECK_LEGAL_TAG ]; then CHECK_LEGAL_TAG=true; else if [ $CHECK_LEGAL_TAG != false ]; then CHECK_LEGAL_TAG=true; fi fi
