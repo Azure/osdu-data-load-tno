@@ -548,42 +548,29 @@ def load_files(dir_name):
     return success, failed
 
 
-def execute_sequence_ingestion(dir_name, ingestion_sequence, batch_size=300):
+def execute_sequence_ingestion(dir_name, ingestion_sequence):
     with open(ingestion_sequence) as file:
         sequence = json.load(file)
 
     for entry in sequence:
-        fileName = entry.get("FileName")
-        filepath = os.path.join(dir_name, fileName)
+        file_name = entry.get("FileName")
+        filepath = os.path.join(dir_name, file_name)
         filepath_normalized = os.path.normpath(filepath)
         logger.debug(f"File to be ingested - {filepath_normalized}")
-        object_to_ingest, data_type = get_object_to_ingest(
-            {}, True, filepath_normalized)
-        number_of_references = len(object_to_ingest)
 
-        batch = []
-        for i in range(0, number_of_references):
-            batch.append(object_to_ingest[i])
+        object_to_ingest, data_type = get_object_to_ingest({}, True, filepath_normalized)
+        if object_to_ingest is None:
+            logger.warning(f"No objects to ingest for file: {filepath_normalized}")
+            continue
 
-            if len(batch) == batch_size:
-                logger.debug(f"Ingesting batch of size {batch_size}")
-                manifest_ingest(False, len(batch), batch, data_type)
-                batch = []
+        logger.debug(f"Ingesting objects from file: {filepath_normalized}")
+        manifest_ingest(False, object_to_ingest, data_type)
 
-        if len(batch) > 0:
-            logger.debug(f"Ingesting remaining records of size {len(batch)}")
-            manifest_ingest(False, len(batch), batch, data_type)
-
-
-def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map="", standard_reference=False): #kym
-
-    # For all manifest files
+def execute_ingestion(dir_name, is_wpc=False, file_location_map="", standard_reference=False): #kym
     for root, _, files in os.walk(dir_name):
         logger.debug(f"Files list: {files}")
-        cur_batch = 0
-        data_objects = []
-
         for file in files:
+            data_objects = []
             filepath = os.path.join(root, file)
             object_to_ingest, data_type = get_object_to_ingest(file_location_map, standard_reference, filepath) #kym
 
@@ -593,19 +580,10 @@ def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map=""
             if is_wpc:
                 manifest_obj = populate_manifest(object_to_ingest, data_type)
                 data_objects.append(manifest_obj)
-                cur_batch = len(data_objects)
             else:
-                data_objects += object_to_ingest
-                cur_batch += len(object_to_ingest)
+                data_objects.append(object_to_ingest)
 
-            if cur_batch >= batch_size:
-                cur_batch, data_objects = manifest_ingest(is_wpc, cur_batch, data_objects, data_type) #kym
-            else:
-                logger.debug(f"execute_ingestion - Current batch size after process {filepath} is {cur_batch}. Reading more files...")
-
-        if cur_batch > 0:
-            logger.debug(f"Ingesting remaining records {cur_batch}")
-            manifest_ingest(is_wpc, cur_batch, data_objects, data_type)
+            manifest_ingest(is_wpc, data_objects, data_type) #kym
 
 
 def get_object_to_ingest(file_location_map, standard_reference, filepath): #kym
@@ -651,28 +629,24 @@ def get_directory_name(filepath):
     return urllib.parse.quote(dir_name)
 
 
-def manifest_ingest(is_wpc, cur_batch, data_objects, data_type): #kym
-    cur_batch = 0
-    manifest_batch_size = 100
+def manifest_ingest(is_wpc, data_objects, data_type): #kym
+    manifest_batch_size = vars_parsed_args.get("batch")
     batch_objects = []
     logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {manifest_batch_size}")
+
     for i, data_object in enumerate(data_objects):
         batch_objects.append(data_object)
-        cur_batch += 1
 
-        if cur_batch == manifest_batch_size or i == len(data_objects) - 1:
-            logger.debug(f"Manifest Ingestion - Current batch: {cur_batch}")
+        if len(batch_objects) == manifest_batch_size or i == len(data_objects) - 1:
             if is_wpc:
                 request_data = populate_workflow_request(batch_objects)
-                logger.debug(f"Sending Request with WPC data {cur_batch}")
+                logger.debug(f"Sending Request with WPC data, batch size: {len(batch_objects)}")
             else:
                 request_data = populate_typed_workflow_request(batch_objects, data_type)
-                logger.debug(f"Sending Request with batch size {cur_batch}") #kym
+                logger.debug(f"Sending Request with batch size: {len(batch_objects)}")
 
             send_request(request_data)
             batch_objects = []
-    cur_batch = 0
-    return cur_batch, batch_objects
 
 def status_check():
     with open(LOG_FILENAME) as f:
@@ -995,7 +969,7 @@ def main(argv):
         a_standard_ref = vars_parsed_args.get("standard_reference")
 
         # Execute Action
-        execute_ingestion(a_dir, a_batch_size, a_is_wpc, a_location_map, a_standard_ref) #kym
+        execute_ingestion(a_dir, a_is_wpc, a_location_map, a_standard_ref) #kym
 
     #####################
     # Action: references
