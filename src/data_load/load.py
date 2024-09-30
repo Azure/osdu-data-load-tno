@@ -575,7 +575,7 @@ def execute_sequence_ingestion(dir_name, ingestion_sequence, batch_size=300):
             manifest_ingest(False, len(batch), batch, data_type)
 
 
-def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map="", standard_reference=False):
+def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map="", standard_reference=False): #####
 
     # For all manifest files
     for root, _, files in os.walk(dir_name):
@@ -657,7 +657,7 @@ def manifest_ingest(is_wpc, cur_batch, data_objects, data_type):
         logger.debug(f"Sending Request with WPC data {cur_batch}")
     else:
         request_data = populate_typed_workflow_request(data_objects, data_type)
-        logger.debug(f"Sending Request with batch size {cur_batch}")
+        logger.debug(f"Sending Request with batch size {cur_batch}") ########
 
     send_request(request_data)
     cur_batch = 0
@@ -834,7 +834,7 @@ def populate_typed_workflow_request(data, data_type):
             "manifest": populate_manifest(data, data_type)
         }
     }
-    logger.debug(f"Request to be sent {request}")
+    logger.debug(f"Request to be sent {request}") #####
     return request
 
 

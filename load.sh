@@ -17,6 +17,7 @@ if [ -z $LOAD_FILES ]; then LOAD_FILES=true; else if [ $LOAD_FILES != false ]; t
 if [ -z $LOAD_WORKPRODUCTS ]; then LOAD_WORKPRODUCTS=true; else if [ $LOAD_WORKPRODUCTS != false ]; then LOAD_WORKPRODUCTS=true; fi fi
 if [ -z $KEEP_OPEN ]; then KEEP_OPEN=false; fi
 
+
 if [ -z $1 ]; then
   if [ -z $DATA_PARTITION ]; then
     tput setaf 1; echo "ERROR: Argument \$1 - Data Partition name required." ; tput sgr0
@@ -34,6 +35,9 @@ do
         p) data_partition=${OPTARG};;
     esac
 done
+
+echo "BATCH_SIZE: $BATCH_SIZE"
+echo "WORKERS: $WORKERS"
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PARENT_DIR=`dirname $SCRIPT_DIR`
