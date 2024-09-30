@@ -653,15 +653,15 @@ def get_directory_name(filepath):
 
 def manifest_ingest(is_wpc, cur_batch, data_objects, data_type): #kym
     cur_batch = 0
-    batch_size = 5
+    manifest_batch_size = 100
     batch_objects = []
-    logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {batch_size}")
+    logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {manifest_batch_size}")
     for i, data_object in enumerate(data_objects):
-        logger.debug(f"Manifest Ingestion - Current batch size {cur_batch}")
         batch_objects.append(data_object)
         cur_batch += 1
 
-        if cur_batch == batch_size or i == len(data_objects) - 1:
+        if cur_batch == manifest_batch_size or i == len(data_objects) - 1:
+            logger.debug(f"Manifest Ingestion - Current batch: {cur_batch}")
             if is_wpc:
                 request_data = populate_workflow_request(batch_objects)
                 logger.debug(f"Sending Request with WPC data {cur_batch}")
@@ -670,9 +670,8 @@ def manifest_ingest(is_wpc, cur_batch, data_objects, data_type): #kym
                 logger.debug(f"Sending Request with batch size {cur_batch}") #kym
 
             send_request(request_data)
-            cur_batch = 0
             batch_objects = []
-
+    cur_batch = 0
     return cur_batch, batch_objects
 
 def status_check():
