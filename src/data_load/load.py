@@ -575,7 +575,7 @@ def execute_sequence_ingestion(dir_name, ingestion_sequence, batch_size=300):
             manifest_ingest(False, len(batch), batch, data_type)
 
 
-def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map="", standard_reference=False): #####
+def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map="", standard_reference=False): #kym
 
     # For all manifest files
     for root, _, files in os.walk(dir_name):
@@ -585,7 +585,7 @@ def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map=""
 
         for file in files:
             filepath = os.path.join(root, file)
-            object_to_ingest, data_type = get_object_to_ingest(file_location_map, standard_reference, filepath)
+            object_to_ingest, data_type = get_object_to_ingest(file_location_map, standard_reference, filepath) #kym
 
             if object_to_ingest is None:
                 continue
@@ -599,16 +599,16 @@ def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map=""
                 cur_batch += len(object_to_ingest)
 
             if cur_batch >= batch_size:
-                cur_batch, data_objects = manifest_ingest(is_wpc, cur_batch, data_objects, data_type)
+                cur_batch, data_objects = manifest_ingest(is_wpc, cur_batch, data_objects, data_type) #kym
             else:
-                logger.debug(f"Current batch size after process {filepath} is {cur_batch}. Reading more files...")
+                logger.debug(f"execute_ingestion - Current batch size after process {filepath} is {cur_batch}. Reading more files...")
 
         if cur_batch > 0:
             logger.debug(f"Ingesting remaining records {cur_batch}")
             manifest_ingest(is_wpc, cur_batch, data_objects, data_type)
 
 
-def get_object_to_ingest(file_location_map, standard_reference, filepath):
+def get_object_to_ingest(file_location_map, standard_reference, filepath): #kym
     logger.debug(f"parsing file for ingestion - {filepath}")
 
     if filepath.endswith(".json"):
@@ -651,19 +651,29 @@ def get_directory_name(filepath):
     return urllib.parse.quote(dir_name)
 
 
-def manifest_ingest(is_wpc, cur_batch, data_objects, data_type):
-    if is_wpc:
-        request_data = populate_workflow_request(data_objects)
-        logger.debug(f"Sending Request with WPC data {cur_batch}")
-    else:
-        request_data = populate_typed_workflow_request(data_objects, data_type)
-        logger.debug(f"Sending Request with batch size {cur_batch}") ########
-
-    send_request(request_data)
+def manifest_ingest(is_wpc, cur_batch, data_objects, data_type): #kym
     cur_batch = 0
-    data_objects = []
-    return cur_batch, data_objects
+    batch_size = 5
+    batch_objects = []
+    logger.debug("Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {batch_size}")
+    for i, data_object in enumerate(data_objects):
+        logger.debug(f"Manifest Ingestion - Current batch size {cur_batch}")
+        batch_objects.append(data_object)
+        cur_batch += 1
 
+        if cur_batch == batch_size or i == len(data_objects) - 1:
+            if is_wpc:
+                request_data = populate_workflow_request(batch_objects)
+                logger.debug(f"Sending Request with WPC data {cur_batch}")
+            else:
+                request_data = populate_typed_workflow_request(batch_objects, data_type)
+                logger.debug(f"Sending Request with batch size {cur_batch}") #kym
+
+            send_request(request_data)
+            cur_batch = 0
+            batch_objects = []
+
+    return cur_batch, batch_objects
 
 def status_check():
     with open(LOG_FILENAME) as f:
@@ -986,7 +996,7 @@ def main(argv):
         a_standard_ref = vars_parsed_args.get("standard_reference")
 
         # Execute Action
-        execute_ingestion(a_dir, a_batch_size, a_is_wpc, a_location_map, a_standard_ref)
+        execute_ingestion(a_dir, a_batch_size, a_is_wpc, a_location_map, a_standard_ref) #kym
 
     #####################
     # Action: references
