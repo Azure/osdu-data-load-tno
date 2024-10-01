@@ -247,7 +247,7 @@
             },
             "logLevel": {
               "type": "string",
-              "defaultValue": "INFO",
+              "defaultValue": "DEBUG",
               "allowedValues": [
                 "DEBUG",
                 "INFO",
@@ -308,10 +308,6 @@
                         {
                           "name": "CLIENT_SECRET",
                           "secureValue": "[[parameters('clientSecret')]"
-                        },
-                        {
-                          "name": "WORKERS",
-                          "value": 50
                         },
                         {
                           "name": "LOG_LEVEL",
