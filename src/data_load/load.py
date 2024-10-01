@@ -39,21 +39,6 @@ MAX_CHUNK_SIZE = 32  # MegaBytes
 DEFAULT_TIMEOUT = 5  # seconds
 
 
-class TimeoutHTTPAdapter(HTTPAdapter):
-    def __init__(self, *args, **kwargs):
-        self.timeout = DEFAULT_TIMEOUT
-        if "timeout" in kwargs:
-            self.timeout = kwargs["timeout"]
-            del kwargs["timeout"]
-        super().__init__(*args, **kwargs)
-
-    def send(self, request, **kwargs):
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            kwargs["timeout"] = self.timeout
-        return super().send(request, **kwargs)
-
-
 # Read config file dataload.ini
 config = configparser.RawConfigParser()
 config.read("output/dataload.ini")
@@ -125,22 +110,34 @@ def requests_retry_session(
     backoff_factor=1.5,
     status_forcelist=(404, 429, 500, 502, 503, 504),
     allowed_methods=["GET", "PUT", "POST", "DELETE"],
+    timeout=10,  # Timeout in seconds
     session=None,
 ):
     session = session or requests.Session()
+
     retry = Retry(
         total=retries,
         read=retries,
         connect=retries,
         backoff_factor=backoff_factor,
         status_forcelist=status_forcelist,
-        allowed_methods=allowed_methods,
+        allowed_methods=frozenset(allowed_methods),  # Convert to frozenset for consistency with Retry class
     )
+
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-    return session
 
+    # Wrap the request method with a default timeout
+    original_request = session.request
+
+    def request_with_timeout(method, url, **kwargs):
+        kwargs.setdefault('timeout', timeout)  # Set default timeout if not provided
+        return original_request(method, url, **kwargs)
+
+    session.request = request_with_timeout
+
+    return session
 
 def get_directory_size(directory):
     """Returns the `directory` size in bytes."""
