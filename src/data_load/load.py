@@ -444,9 +444,9 @@ def load_single_file(session, root, file):
         #####################
         # Get FileUrl
         #####################
-        logger.debug("Requesting upload URL")
+        logger.debug(f"Requesting upload URL for: {filepath}")
         response = session.get(FILE_URL + "/files/uploadURL", json={}, headers=headers)
-        logger.debug(f"Upload URL response status: {response.status_code}")
+        logger.debug(f"Upload URL response status for {filepath}: {response.status_code}")
 
         if response.status_code != 200:
             logger.error(f"/files/uploadURL failed for {filepath} with response {response}")
@@ -455,27 +455,27 @@ def load_single_file(session, root, file):
         upload_url_response = response.json()
         signed_url = upload_url_response.get("Location").get("SignedURL")
         file_source = upload_url_response.get("Location").get("FileSource")
-        logger.debug("Received signed URL")
+        logger.debug(f"Received signed URL for {filepath}")
 
         #####################
         # Put BLOB Data
         #####################
-        logger.debug(f"Getting blob client")
+        logger.debug(f"Getting blob client for {filepath}")
         blob_client = BlobClient.from_blob_url(signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
         logger.debug(f"Opening file stream for {filepath}")
         with open(filepath, "rb") as file_stream:
             logger.debug(f"Uploading file to blob: {filepath}")
             upload_response = blob_client.upload_blob(file_stream, blob_type="BlockBlob", overwrite=True)
-            logger.debug(f"Blob upload response: {upload_response}")
+            logger.debug(f"Blob upload response for {filepath}: {upload_response}")
 
         #####################
         # Post MetaData
         #####################
-        logger.debug("Populating metadata")
+        logger.debug(f"Populating metadata for {filepath}")
         metadata_body = json.dumps(populate_file_metadata(file_source, file, dir_name))
         logger.info(f"Posting request for file {filepath}: {metadata_body}")
         metadata_response = session.post(FILE_URL + "/files/metadata", metadata_body, headers=headers)
-        logger.debug(f"Metadata response status: {metadata_response.status_code}")
+        logger.debug(f"Metadata response status for {filepath}: {metadata_response.status_code}")
         
 
         if metadata_response.status_code != 201:
@@ -486,16 +486,16 @@ def load_single_file(session, root, file):
         # Get Record Version
         #####################
         file_id = metadata_response.json().get("id")
-        logger.debug(f"Getting record version for file ID: {file_id}")
+        logger.debug(f"Getting record version for {filepath} with file ID: {file_id}")
         version_response = session.get(STORAGE_URL + "/versions/" + file_id, headers=headers)
-        logger.debug(f"Version response status: {version_response.status_code}")
+        logger.debug(f"Version response status for {filepath} with file ID: {file_id}: {version_response.status_code}")
 
         if version_response.status_code != 200:
-            logger.error(f"/storage/versions failed for {file_id} with response {version_response}")
+            logger.error(f"/storage/versions failed for {filepath} with file ID {file_id} with response {version_response}")
             return FILE_UPLOAD_FAILED, filepath
 
         record_version = version_response.json().get("versions")[0]
-        logger.debug(f"Record version: {record_version}")
+        logger.debug(f"Record version for {filepath}: {record_version}")
 
         output = {
             "file_id": file_id,
