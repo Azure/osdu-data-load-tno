@@ -1061,7 +1061,7 @@ def main(argv):
 
         # Execute Action
         success, failed = load_files(a_dir)
-
+        logger.debug(f"Files that are successfully uploaded: {len(success)}")
         # Create Result File
         with open(a_file_name, 'w') as f:
             json.dump(success, f, indent=4)
