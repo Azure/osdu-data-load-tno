@@ -133,7 +133,11 @@ def requests_retry_session(
 
     def request_with_timeout(method, url, **kwargs):
         kwargs.setdefault('timeout', timeout)  # Set default timeout if not provided
-        return original_request(method, url, **kwargs)
+        try:
+            return original_request(method, url, **kwargs)
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Request to {url} timed out: {e}")
+            raise
 
     session.request = request_with_timeout
 
