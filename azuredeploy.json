@@ -310,6 +310,10 @@
                           "secureValue": "[[parameters('clientSecret')]"
                         },
                         {
+                          "name": "WORKERS",
+                          "value": 50
+                        },
+                        {
                           "name": "LOG_LEVEL",
                           "value": "[[parameters('logLevel')]"
                         }
