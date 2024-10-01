@@ -127,12 +127,6 @@ def requests_retry_session(
     allowed_methods=["GET", "PUT", "POST", "DELETE"],
     session=None,
 ):
-    logger.info("Creating a requests retry session")
-    logger.debug(f"Retries: {retries}")
-    logger.debug(f"Backoff factor: {backoff_factor}")
-    logger.debug(f"Status forcelist: {status_forcelist}")
-    logger.debug(f"Allowed methods: {allowed_methods}")
-
     session = session or requests.Session()
     retry = Retry(
         total=retries,
@@ -145,8 +139,6 @@ def requests_retry_session(
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-
-    logger.info("Requests retry session created successfully")
     return session
 
 
