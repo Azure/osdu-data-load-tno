@@ -127,6 +127,12 @@ def requests_retry_session(
     allowed_methods=["GET", "PUT", "POST", "DELETE"],
     session=None,
 ):
+    logger.info("Creating a requests retry session")
+    logger.debug(f"Retries: {retries}")
+    logger.debug(f"Backoff factor: {backoff_factor}")
+    logger.debug(f"Status forcelist: {status_forcelist}")
+    logger.debug(f"Allowed methods: {allowed_methods}")
+
     session = session or requests.Session()
     retry = Retry(
         total=retries,
@@ -139,6 +145,8 @@ def requests_retry_session(
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
+
+    logger.info("Requests retry session created successfully")
     return session
 
 
@@ -437,60 +445,63 @@ def load_single_file(session, root, file):
     headers = get_headers(config)
     dir_name = root.split("/")[-1]
 
+    logger.debug(f"Starting upload for file: {filepath}")
+
     try:
         #####################
         # Get FileUrl
         #####################
-
-        response = session.get(
-            FILE_URL + "/files/uploadURL", json={}, headers=headers)
+        logger.debug("Requesting upload URL")
+        response = session.get(FILE_URL + "/files/uploadURL", json={}, headers=headers)
+        logger.debug(f"Upload URL response status: {response.status_code}")
 
         if response.status_code != 200:
-            logger.error(
-                f"/files/uploadURL failed for {filepath} with response {response}")
+            logger.error(f"/files/uploadURL failed for {filepath} with response {response}")
             return FILE_UPLOAD_FAILED, filepath
 
         upload_url_response = response.json()
         signed_url = upload_url_response.get("Location").get("SignedURL")
         file_source = upload_url_response.get("Location").get("FileSource")
+        logger.debug("Received signed URL")
 
         #####################
         # Put BLOB Data
         #####################
-        blob_client = BlobClient.from_blob_url(
-            signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
-        blob_client = BlobClient.from_blob_url(signed_url)
+        logger.debug("Uploading blob data")
+        blob_client = BlobClient.from_blob_url(signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
         with open(filepath, "rb") as file_stream:
-            upload_response = blob_client.upload_blob(
-                file_stream, blob_type="BlockBlob", overwrite=True)
-            logger.debug(f"Blob upload response {upload_response}")
+            logger.debug(f"Uploading file to blob: {filepath}")
+            upload_response = blob_client.upload_blob(file_stream, blob_type="BlockBlob", overwrite=True)
+            logger.debug(f"Blob upload response: {upload_response}")
 
         #####################
         # Post MetaData
         #####################
-        metadata_body = json.dumps(
-            populate_file_metadata(file_source, file, dir_name))
-        metadata_response = session.post( ####### FAILING!
-            FILE_URL + "/files/metadata", metadata_body, headers=headers)
-        logger.info(f"Metadata Body for {filepath} : {metadata_body}")
+        logger.debug("Populating metadata")
+        metadata_body = json.dumps(populate_file_metadata(file_source, file, dir_name))
+        logger.info(f"Posting request for file {filepath}: {metadata_body}")
+        metadata_response = session.post(FILE_URL + "/files/metadata", metadata_body, headers=headers)
+        logger.debug(f"Metadata response status: {metadata_response.status_code}")
+        
+
         if metadata_response.status_code != 201:
-            logger.error(
-                f"/files/metadata failed for {filepath} with response {metadata_response.status_code} and body {metadata_response.text}")
+            logger.error(f"/files/metadata failed for {filepath} with response {metadata_response.status_code} and body {metadata_response.text}")
             return FILE_UPLOAD_FAILED, filepath
 
         #####################
         # Get Record Version
         #####################
         file_id = metadata_response.json().get("id")
-        version_response = session.get(
-            STORAGE_URL + "/versions/" + file_id, headers=headers)
+        logger.debug(f"Getting record version for file ID: {file_id}")
+        version_response = session.get(STORAGE_URL + "/versions/" + file_id, headers=headers)
+        logger.debug(f"Version response status: {version_response.status_code}")
 
         if version_response.status_code != 200:
-            logger.error(
-                f"/storage/versions failed for {file_id} with response {version_response}")
+            logger.error(f"/storage/versions failed for {file_id} with response {version_response}")
             return FILE_UPLOAD_FAILED, filepath
 
         record_version = version_response.json().get("versions")[0]
+        logger.debug(f"Record version: {record_version}")
 
         output = {
             "file_id": file_id,
@@ -506,14 +517,18 @@ def load_single_file(session, root, file):
     logger.info(f"File Upload Completed: {file}")
     return FILE_UPLOAD_SUCCESS, (file, output)
 
-
 def load_files(dir_name):
+    logger.info("Starting load_files function")
+
     n_cores = multiprocessing.cpu_count()
+    logger.info(f"Number of CPU cores: {n_cores}")
 
     if os.getenv("WORKERS") is not None:
         n_jobs = int(os.getenv("WORKERS"))
+        logger.info(f"Using WORKERS environment variable for number of jobs: {n_jobs}")
     else:
-        n_jobs = 30 * n_cores
+        n_jobs = 2 * n_cores
+        logger.info(f"Calculated number of jobs: {n_jobs}")
 
     dir_size = get_size_format(get_directory_size(dir_name))
     logger.info(f"Amount of data to transfer: {dir_size}")
@@ -523,28 +538,39 @@ def load_files(dir_name):
     results = []
 
     sessions = [requests_retry_session() for i in range(n_jobs)]
+    logger.info(f"Created {n_jobs} sessions")
 
     for root, _, files in os.walk(dir_name):
+        logger.info(f"Processing directory: {root}")
         files = [f for f in files if re.match(includes, f)]
         logger.info(f"Total number of files to upload: {len(files)}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            logger.info(f"Submitting {len(files)} files to the executor")
             future_result = {executor.submit(
                 load_single_file, sessions[i % n_jobs], root, files[i]): i for i in range(0, len(files))}
+            logger.info(f"Submitted {len(files)} files to the executor")
 
             for future in concurrent.futures.as_completed(future_result):
-                result = future.result()
-                logger.debug(f"{result[1]}")
-                results.append(result)
+                try:
+                    result = future.result()
+                    logger.debug(f"Result for file {future_result[future]}: {result[1]}")
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"Exception occurred for file {future_result[future]}, Exception: {e}")
 
     failed = []
     success = {}
     for result in results:
         if result[0] == FILE_UPLOAD_FAILED:
             failed.append(result[1])
+            logger.error(f"File upload failed: {result[1]}")
         else:
             file, metadata = result[1]
             success[file] = metadata
+            logger.info(f"File upload succeeded: {file}")
+
+    logger.info("Completed load_files function")
     return success, failed
 
 
