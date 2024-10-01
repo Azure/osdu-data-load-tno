@@ -460,9 +460,9 @@ def load_single_file(session, root, file):
         #####################
         # Put BLOB Data
         #####################
-        loggeer.debug(f"Getting blob client")
+        logger.debug(f"Getting blob client")
         blob_client = BlobClient.from_blob_url(signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
-        loggeer.debug(f"Opening file stream for {filepath}")
+        logger.debug(f"Opening file stream for {filepath}")
         with open(filepath, "rb") as file_stream:
             logger.debug(f"Uploading file to blob: {filepath}")
             upload_response = blob_client.upload_blob(file_stream, blob_type="BlockBlob", overwrite=True)
