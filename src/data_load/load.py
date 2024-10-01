@@ -656,24 +656,6 @@ def get_directory_name(filepath):
     return urllib.parse.quote(dir_name)
 
 
-# def manifest_ingest(is_wpc, batch_size, data_objects, data_type): #kym
-#     batch_objects = []
-#     logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {batch_size} records")
-
-#     for i, data_object in enumerate(data_objects):
-#         batch_objects.append(data_object)
-
-#         if len(batch_objects) == batch_size or i == len(data_objects) - 1:
-#             if is_wpc:
-#                 request_data = populate_workflow_request(batch_objects)
-#                 logger.debug(f"Sending Request with WPC data, batch number: {len(batch_objects)}")
-#             else:
-#                 request_data = populate_typed_workflow_request(batch_objects, data_type)
-#                 logger.debug(f"Sending Request with batch number: {len(batch_objects)}")
-
-#             send_request(request_data)
-#             batch_objects = []
-
 def send_batch_request(batch_objects, is_wpc, data_type):
     if is_wpc:
         request_data = populate_workflow_request(batch_objects)
@@ -686,10 +668,10 @@ def send_batch_request(batch_objects, is_wpc, data_type):
 
 def manifest_ingest(is_wpc, batch_size, data_objects, data_type): #kym
     batch_objects = []
-    logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_objects)}, splitting into batches of {batch_size} records")
     logger.debug(f"Data type: {data_type}, WPC mode: {is_wpc}, data_objects: {data_objects}")
 
     for data_object in data_objects:
+        logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_object)}, splitting into batches of {batch_size} records")
         if data_type == "MasterData":
             for record in data_object:  # Iterate over the records inside each data_object
                 batch_objects.append(record)
