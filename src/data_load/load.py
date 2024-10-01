@@ -437,7 +437,7 @@ def load_single_file(session, root, file):
     headers = get_headers(config)
     dir_name = root.split("/")[-1]
 
-    logger.debug(f"Starting upload for file: {filepath}")
+    logger.info(f"Starting upload for file: {filepath}")
 
     try:
         #####################
@@ -459,8 +459,9 @@ def load_single_file(session, root, file):
         #####################
         # Put BLOB Data
         #####################
-        logger.debug("Uploading blob data")
+        loggeer.debug(f"Getting blob client")
         blob_client = BlobClient.from_blob_url(signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
+        loggeer.debug(f"Opening file stream for {filepath}")
         with open(filepath, "rb") as file_stream:
             logger.debug(f"Uploading file to blob: {filepath}")
             upload_response = blob_client.upload_blob(file_stream, blob_type="BlockBlob", overwrite=True)
@@ -542,15 +543,22 @@ def load_files(dir_name):
             future_result = {executor.submit(
                 load_single_file, sessions[i % n_jobs], root, files[i]): i for i in range(0, len(files))}
             logger.info(f"Submitted {len(files)} files to the executor")
-
+            
             for future in concurrent.futures.as_completed(future_result):
+                file_index = future_result[future]
                 try:
                     result = future.result()
-                    logger.debug(f"Result for file {future_result[future]}: {result[1]}")
+                    if result[0] == FILE_UPLOAD_FAILED:
+                        file_path = result[1]
+                        logger.error(f"File upload failed for {file_path}")
+                    else:
+                        file_path, metadata = result[1]
+                        logger.info(f"File upload succeeded for {file_path}")
+                        logger.debug(f"Metadata for {file_path}: {metadata}")
                     results.append(result)
                 except Exception as e:
-                    logger.error(f"Exception occurred for file {future_result[future]}, Exception: {e}")
-
+                    logger.error(f"Exception occurred for file index {file_index}, Exception: {e}")
+    
     failed = []
     success = {}
     for result in results:
