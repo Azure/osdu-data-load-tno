@@ -247,7 +247,7 @@
             },
             "logLevel": {
               "type": "string",
-              "defaultValue": "INFO",
+              "defaultValue": "DEBUG",
               "allowedValues": [
                 "DEBUG",
                 "INFO",

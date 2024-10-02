@@ -7,7 +7,7 @@
 usage() { echo "Usage: load.sh <data_partition>" 1>&2; exit 1; }
 
 if [ -z $LOG_LEVEL ]; then LOG_LEVEL="info"; fi
-if [ -z $BATCH_SIZE ]; then BATCH_SIZE=100; fi
+if [ -z $BATCH_SIZE ]; then BATCH_SIZE=25; fi
 if [ -z $PIP_INSTALL ]; then PIP_INSTALL=true; else if [ $PIP_INSTALL != false ]; then PIP_INSTALL=true; fi fi
 if [ -z $CONFIGURE_INI ]; then CONFIGURE_INI=true; else if [ $CONFIGURE_INI != false ]; then CONFIGURE_INI=true; fi fi
 if [ -z $CHECK_LEGAL_TAG ]; then CHECK_LEGAL_TAG=true; else if [ $CHECK_LEGAL_TAG != false ]; then CHECK_LEGAL_TAG=true; fi fi
@@ -16,6 +16,7 @@ if [ -z $LOAD_MASTERDATA ]; then LOAD_MASTERDATA=true; else if [ $LOAD_MASTERDAT
 if [ -z $LOAD_FILES ]; then LOAD_FILES=true; else if [ $LOAD_FILES != false ]; then LOAD_FILES=true; fi fi
 if [ -z $LOAD_WORKPRODUCTS ]; then LOAD_WORKPRODUCTS=true; else if [ $LOAD_WORKPRODUCTS != false ]; then LOAD_WORKPRODUCTS=true; fi fi
 if [ -z $KEEP_OPEN ]; then KEEP_OPEN=false; fi
+
 
 if [ -z $1 ]; then
   if [ -z $DATA_PARTITION ]; then
@@ -34,6 +35,9 @@ do
         p) data_partition=${OPTARG};;
     esac
 done
+
+echo "BATCH_SIZE: $BATCH_SIZE"
+echo "WORKERS: $WORKERS"
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PARENT_DIR=`dirname $SCRIPT_DIR`
