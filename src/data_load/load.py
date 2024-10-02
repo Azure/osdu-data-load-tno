@@ -593,13 +593,13 @@ def execute_sequence_ingestion(dir_name, batch_size, ingestion_sequence):
         logger.debug(f"Ingesting objects from file: {filepath_normalized}")
         manifest_ingest(False, batch_size, object_to_ingest, data_type)
 
-def execute_ingestion(dir_name, batch_size, is_wpc=False, file_location_map="", standard_reference=False): #kym
+def execute_ingestion(dir_name, batch_size, is_wpc=False, file_location_map="", standard_reference=False):
     for root, _, files in os.walk(dir_name):
         logger.debug(f"Files list: {files}")
         for file in files:
             data_objects = []
             filepath = os.path.join(root, file)
-            object_to_ingest, data_type = get_object_to_ingest(file_location_map, standard_reference, filepath) #kym
+            object_to_ingest, data_type = get_object_to_ingest(file_location_map, standard_reference, filepath)
 
             if object_to_ingest is None:
                 continue
@@ -610,10 +610,10 @@ def execute_ingestion(dir_name, batch_size, is_wpc=False, file_location_map="", 
             else:
                 data_objects.append(object_to_ingest)
 
-            manifest_ingest(is_wpc, batch_size, data_objects, data_type) #kym
+            manifest_ingest(is_wpc, batch_size, data_objects, data_type)
 
 
-def get_object_to_ingest(file_location_map, standard_reference, filepath): #kym
+def get_object_to_ingest(file_location_map, standard_reference, filepath): 
     logger.debug(f"parsing file for ingestion - {filepath}")
 
     if filepath.endswith(".json"):
@@ -666,7 +666,7 @@ def send_batch_request(batch_objects, is_wpc, data_type):
 
     send_request(request_data)
 
-def manifest_ingest(is_wpc, batch_size, data_objects, data_type): #kym
+def manifest_ingest(is_wpc, batch_size, data_objects, data_type):
     batch_objects = []
     logger.debug(f"Data type: {data_type}, WPC mode: {is_wpc}, data_objects: {data_objects}")
 
@@ -1015,7 +1015,7 @@ def main(argv):
         a_standard_ref = vars_parsed_args.get("standard_reference")
 
         # Execute Action
-        execute_ingestion(a_dir, a_batch_size, a_is_wpc, a_location_map, a_standard_ref) #kym
+        execute_ingestion(a_dir, a_batch_size, a_is_wpc, a_location_map, a_standard_ref)
 
     #####################
     # Action: references
