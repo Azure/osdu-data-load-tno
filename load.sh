@@ -27,7 +27,7 @@ else
   DATA_PARTITION=$1
 fi
 
-if [ -z $DATA_DOMAIN ]; then DATA_DOMAIN='dataservices.energy'; fi
+if [ -z $DOMAIN ]; then DOMAIN='dataservices.energy'; fi
 
 while getopts p: flag
 do
@@ -73,7 +73,7 @@ function ConfigureIni() {
     sed -i -e "s/<LEGAL_TAG>/${LEGAL_TAG}/g" "$SCRIPT_DIR/output/dataload.ini"
     sed -i -e "s/<DATA_PARTITION>/${DATA_PARTITION}/g" "$SCRIPT_DIR/output/dataload.ini"
     sed -i -e "s?<LOGIN_ENDPOINT>?${LOGIN_ENDPOINT}?g" "$SCRIPT_DIR/output/dataload.ini"
-    sed -i -e "s?<DOMAIN>?${DATA_DOMAIN}?g" "$SCRIPT_DIR/output/dataload.ini"
+    sed -i -e "s?<DOMAIN>?${DOMAIN}?g" "$SCRIPT_DIR/output/dataload.ini"
     echo "-----"
   else
     echo "Config dataload.ini - Bypassed."
