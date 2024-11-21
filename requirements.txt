@@ -2,7 +2,7 @@ jsonschema
 lasio==0.24.1
 pytest
 coloredlogs==10.0
-azure-storage-blob==12.8.1
+azure-storage-blob==12.13.0
 requests==2.31.0
 joblib==1.2.0
 osducli
