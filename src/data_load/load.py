@@ -39,21 +39,6 @@ MAX_CHUNK_SIZE = 32  # MegaBytes
 DEFAULT_TIMEOUT = 5  # seconds
 
 
-class TimeoutHTTPAdapter(HTTPAdapter):
-    def __init__(self, *args, **kwargs):
-        self.timeout = DEFAULT_TIMEOUT
-        if "timeout" in kwargs:
-            self.timeout = kwargs["timeout"]
-            del kwargs["timeout"]
-        super().__init__(*args, **kwargs)
-
-    def send(self, request, **kwargs):
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            kwargs["timeout"] = self.timeout
-        return super().send(request, **kwargs)
-
-
 # Read config file dataload.ini
 config = configparser.RawConfigParser()
 config.read("output/dataload.ini")
@@ -125,22 +110,38 @@ def requests_retry_session(
     backoff_factor=1.5,
     status_forcelist=(404, 429, 500, 502, 503, 504),
     allowed_methods=["GET", "PUT", "POST", "DELETE"],
+    timeout=10,  # Timeout in seconds
     session=None,
 ):
     session = session or requests.Session()
+
     retry = Retry(
         total=retries,
         read=retries,
         connect=retries,
         backoff_factor=backoff_factor,
         status_forcelist=status_forcelist,
-        allowed_methods=allowed_methods,
+        allowed_methods=frozenset(allowed_methods),  # Convert to frozenset for consistency with Retry class
     )
+
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-    return session
 
+    # Wrap the request method with a default timeout
+    original_request = session.request
+
+    def request_with_timeout(method, url, **kwargs):
+        kwargs.setdefault('timeout', timeout)  # Set default timeout if not provided
+        try:
+            return original_request(method, url, **kwargs)
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Request to {url} timed out: {e}")
+            raise
+
+    session.request = request_with_timeout
+
+    return session
 
 def get_directory_size(directory):
     """Returns the `directory` size in bytes."""
@@ -437,60 +438,64 @@ def load_single_file(session, root, file):
     headers = get_headers(config)
     dir_name = root.split("/")[-1]
 
+    logger.info(f"Starting upload for file: {filepath}")
+
     try:
         #####################
         # Get FileUrl
         #####################
-
-        response = session.get(
-            FILE_URL + "/files/uploadURL", json={}, headers=headers)
+        logger.debug(f"Requesting upload URL for: {filepath}")
+        response = session.get(FILE_URL + "/files/uploadURL", json={}, headers=headers)
+        logger.debug(f"Upload URL response status for {filepath}: {response.status_code}")
 
         if response.status_code != 200:
-            logger.error(
-                f"/files/uploadURL failed for {filepath} with response {response}")
+            logger.error(f"/files/uploadURL failed for {filepath} with response {response}")
             return FILE_UPLOAD_FAILED, filepath
 
         upload_url_response = response.json()
         signed_url = upload_url_response.get("Location").get("SignedURL")
         file_source = upload_url_response.get("Location").get("FileSource")
+        logger.debug(f"Received signed URL for {filepath}")
 
         #####################
         # Put BLOB Data
         #####################
-        blob_client = BlobClient.from_blob_url(
-            signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
-        blob_client = BlobClient.from_blob_url(signed_url)
+        logger.debug(f"Getting blob client for {filepath}")
+        blob_client = BlobClient.from_blob_url(signed_url, max_single_put_size=MAX_CHUNK_SIZE * 1024)
+        logger.debug(f"Opening file stream for {filepath}")
         with open(filepath, "rb") as file_stream:
-            upload_response = blob_client.upload_blob(
-                file_stream, blob_type="BlockBlob", overwrite=True)
-            logger.debug(f"Blob upload response {upload_response}")
+            logger.debug(f"Uploading file to blob: {filepath}")
+            upload_response = blob_client.upload_blob(file_stream, blob_type="BlockBlob", overwrite=True)
+            logger.debug(f"Blob upload response for {filepath}: {upload_response}")
 
         #####################
         # Post MetaData
         #####################
-        metadata_body = json.dumps(
-            populate_file_metadata(file_source, file, dir_name))
-        metadata_response = session.post(
-            FILE_URL + "/files/metadata", metadata_body, headers=headers)
+        logger.debug(f"Populating metadata for {filepath}")
+        metadata_body = json.dumps(populate_file_metadata(file_source, file, dir_name))
+        logger.info(f"Posting request for file {filepath}: {metadata_body}")
+        metadata_response = session.post(FILE_URL + "/files/metadata", metadata_body, headers=headers)
+        logger.debug(f"Metadata response status for {filepath}: {metadata_response.status_code}")
+        
 
         if metadata_response.status_code != 201:
-            logger.error(
-                f"/files/metadata failed for {filepath} with response {metadata_response}")
+            logger.error(f"/files/metadata failed for {filepath} with response {metadata_response.status_code} and body {metadata_response.text}")
             return FILE_UPLOAD_FAILED, filepath
 
         #####################
         # Get Record Version
         #####################
         file_id = metadata_response.json().get("id")
-        version_response = session.get(
-            STORAGE_URL + "/versions/" + file_id, headers=headers)
+        logger.debug(f"Getting record version for {filepath} with file ID: {file_id}")
+        version_response = session.get(STORAGE_URL + "/versions/" + file_id, headers=headers)
+        logger.debug(f"Version response status for {filepath} with file ID: {file_id}: {version_response.status_code}")
 
         if version_response.status_code != 200:
-            logger.error(
-                f"/storage/versions failed for {file_id} with response {version_response}")
+            logger.error(f"/storage/versions failed for {filepath} with file ID {file_id} with response {version_response}")
             return FILE_UPLOAD_FAILED, filepath
 
         record_version = version_response.json().get("versions")[0]
+        logger.debug(f"Record version for {filepath}: {record_version}")
 
         output = {
             "file_id": file_id,
@@ -506,14 +511,18 @@ def load_single_file(session, root, file):
     logger.info(f"File Upload Completed: {file}")
     return FILE_UPLOAD_SUCCESS, (file, output)
 
-
 def load_files(dir_name):
+    logger.info("Starting load_files function")
+
     n_cores = multiprocessing.cpu_count()
+    logger.info(f"Number of CPU cores: {n_cores}")
 
     if os.getenv("WORKERS") is not None:
         n_jobs = int(os.getenv("WORKERS"))
+        logger.info(f"Using WORKERS environment variable for number of jobs: {n_jobs}")
     else:
-        n_jobs = 30 * n_cores
+        n_jobs = 2 * n_cores
+        logger.info(f"Calculated number of jobs: {n_jobs}")
 
     dir_size = get_size_format(get_directory_size(dir_name))
     logger.info(f"Amount of data to transfer: {dir_size}")
@@ -523,67 +532,72 @@ def load_files(dir_name):
     results = []
 
     sessions = [requests_retry_session() for i in range(n_jobs)]
+    logger.info(f"Created {n_jobs} sessions")
 
     for root, _, files in os.walk(dir_name):
+        logger.info(f"Processing directory: {root}")
         files = [f for f in files if re.match(includes, f)]
         logger.info(f"Total number of files to upload: {len(files)}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            logger.info(f"Submitting {len(files)} files to the executor")
             future_result = {executor.submit(
                 load_single_file, sessions[i % n_jobs], root, files[i]): i for i in range(0, len(files))}
-
+            logger.info(f"Submitted {len(files)} files to the executor")
+            
             for future in concurrent.futures.as_completed(future_result):
-                result = future.result()
-                logger.debug(f"{result[1]}")
-                results.append(result)
-
+                file_index = future_result[future]
+                try:
+                    result = future.result()
+                    if result[0] == FILE_UPLOAD_FAILED:
+                        file_path = result[1]
+                        logger.error(f"File upload failed for {file_path}")
+                    else:
+                        file_path, metadata = result[1]
+                        logger.info(f"File upload succeeded for {file_path}")
+                        logger.debug(f"Metadata for {file_path}: {metadata}")
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"Exception occurred for file index {file_index}, Exception: {e}")
+    
     failed = []
     success = {}
     for result in results:
         if result[0] == FILE_UPLOAD_FAILED:
             failed.append(result[1])
+            logger.error(f"File upload failed: {result[1]}")
         else:
             file, metadata = result[1]
             success[file] = metadata
+            logger.info(f"File upload succeeded: {file}")
+
+    logger.info("Completed load_files function")
     return success, failed
 
 
-def execute_sequence_ingestion(dir_name, ingestion_sequence, batch_size=300):
+def execute_sequence_ingestion(dir_name, batch_size, ingestion_sequence):
     with open(ingestion_sequence) as file:
         sequence = json.load(file)
 
     for entry in sequence:
-        fileName = entry.get("FileName")
-        filepath = os.path.join(dir_name, fileName)
+        file_name = entry.get("FileName")
+        filepath = os.path.join(dir_name, file_name)
         filepath_normalized = os.path.normpath(filepath)
         logger.debug(f"File to be ingested - {filepath_normalized}")
-        object_to_ingest, data_type = get_object_to_ingest(
-            {}, True, filepath_normalized)
-        number_of_references = len(object_to_ingest)
 
-        batch = []
-        for i in range(0, number_of_references):
-            batch.append(object_to_ingest[i])
+        object_to_ingest, data_type = get_object_to_ingest({}, True, filepath_normalized)
+        if object_to_ingest is None:
+            logger.warning(f"No objects to ingest for file: {filepath_normalized}")
+            continue
 
-            if len(batch) == batch_size:
-                logger.debug(f"Ingesting batch of size {batch_size}")
-                manifest_ingest(False, len(batch), batch, data_type)
-                batch = []
+        logger.debug(f"Ingesting objects from file: {filepath_normalized}")
+        manifest_ingest(False, batch_size, object_to_ingest, data_type)
 
-        if len(batch) > 0:
-            logger.debug(f"Ingesting remaining records of size {len(batch)}")
-            manifest_ingest(False, len(batch), batch, data_type)
-
-
-def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map="", standard_reference=False):
-
-    # For all manifest files
+def execute_ingestion(dir_name, batch_size, is_wpc=False, file_location_map="", standard_reference=False):
     for root, _, files in os.walk(dir_name):
         logger.debug(f"Files list: {files}")
-        cur_batch = 0
-        data_objects = []
-
         for file in files:
+            data_objects = []
             filepath = os.path.join(root, file)
             object_to_ingest, data_type = get_object_to_ingest(file_location_map, standard_reference, filepath)
 
@@ -593,22 +607,13 @@ def execute_ingestion(dir_name, batch_size=1, is_wpc=False, file_location_map=""
             if is_wpc:
                 manifest_obj = populate_manifest(object_to_ingest, data_type)
                 data_objects.append(manifest_obj)
-                cur_batch = len(data_objects)
             else:
-                data_objects += object_to_ingest
-                cur_batch += len(object_to_ingest)
+                data_objects.append(object_to_ingest)
 
-            if cur_batch >= batch_size:
-                cur_batch, data_objects = manifest_ingest(is_wpc, cur_batch, data_objects, data_type)
-            else:
-                logger.debug(f"Current batch size after process {filepath} is {cur_batch}. Reading more files...")
-
-        if cur_batch > 0:
-            logger.debug(f"Ingesting remaining records {cur_batch}")
-            manifest_ingest(is_wpc, cur_batch, data_objects, data_type)
+            manifest_ingest(is_wpc, batch_size, data_objects, data_type)
 
 
-def get_object_to_ingest(file_location_map, standard_reference, filepath):
+def get_object_to_ingest(file_location_map, standard_reference, filepath): 
     logger.debug(f"parsing file for ingestion - {filepath}")
 
     if filepath.endswith(".json"):
@@ -651,18 +656,42 @@ def get_directory_name(filepath):
     return urllib.parse.quote(dir_name)
 
 
-def manifest_ingest(is_wpc, cur_batch, data_objects, data_type):
+def send_batch_request(batch_objects, is_wpc, data_type):
     if is_wpc:
-        request_data = populate_workflow_request(data_objects)
-        logger.debug(f"Sending Request with WPC data {cur_batch}")
+        request_data = populate_workflow_request(batch_objects)
+        logger.debug(f"Sending Request with WPC data, batch number: {len(batch_objects)}")
     else:
-        request_data = populate_typed_workflow_request(data_objects, data_type)
-        logger.debug(f"Sending Request with batch size {cur_batch}")
+        request_data = populate_typed_workflow_request(batch_objects, data_type)
+        logger.debug(f"Sending Request with batch number: {len(batch_objects)}")
 
     send_request(request_data)
-    cur_batch = 0
-    data_objects = []
-    return cur_batch, data_objects
+
+def manifest_ingest(is_wpc, batch_size, data_objects, data_type):
+    batch_objects = []
+    logger.debug(f"Data type: {data_type}, WPC mode: {is_wpc}, data_objects: {data_objects}")
+
+    for data_object in data_objects:
+        logger.debug(f"Manifest Ingestion - Splitting data into batches - Full data set size {len(data_object)}, splitting into batches of {batch_size} records")
+        if data_type == "MasterData":
+            for record in data_object:  # Iterate over the records inside each data_object
+                batch_objects.append(record)
+
+                # Process batch when the size limit is reached
+                if len(batch_objects) == batch_size:
+                    send_batch_request(batch_objects, is_wpc, data_type)
+                    batch_objects = []  # Reset for the next batch
+
+        else:
+            # Handle non-MasterData types (if they don't need special handling)
+            batch_objects.append(data_object)
+
+            if len(batch_objects) == batch_size or data_object == data_objects[-1]:
+                send_batch_request(batch_objects, is_wpc, data_type)
+                batch_objects = []  # Reset for the next batch
+
+    # Send any remaining records in the final batch
+    if batch_objects:
+        send_batch_request(batch_objects, is_wpc, data_type)
 
 
 def status_check():
@@ -834,7 +863,7 @@ def populate_typed_workflow_request(data, data_type):
             "manifest": populate_manifest(data, data_type)
         }
     }
-    logger.debug(f"Request to be sent {request}")
+    logger.debug(f"Request to be sent {request}") #####
     return request
 
 
@@ -998,9 +1027,10 @@ def main(argv):
         vars_parsed_args = vars(parsed_args)
         a_dir = vars_parsed_args.get("dir")
         a_sequence = vars_parsed_args.get("ingestion_sequence")
+        a_batch_size = vars_parsed_args.get("batch")
 
         # Execute Action
-        execute_sequence_ingestion(a_dir, ingestion_sequence=a_sequence)
+        execute_sequence_ingestion(a_dir, a_batch_size, ingestion_sequence=a_sequence)
 
     #####################
     # Action: datasets
@@ -1014,7 +1044,7 @@ def main(argv):
 
         # Execute Action
         success, failed = load_files(a_dir)
-
+        logger.debug(f"Files that are successfully uploaded: {len(success)}")
         # Create Result File
         with open(a_file_name, 'w') as f:
             json.dump(success, f, indent=4)
