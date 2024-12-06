@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.17.1.54307",
-      "templateHash": "1543618559284229187"
+      "version": "0.31.92.45157",
+      "templateHash": "2533794337721421786"
     }
   },
   "variables": {
@@ -247,7 +247,7 @@
             },
             "logLevel": {
               "type": "string",
-              "defaultValue": "DEBUG",
+              "defaultValue": "INFO",
               "allowedValues": [
                 "DEBUG",
                 "INFO",
