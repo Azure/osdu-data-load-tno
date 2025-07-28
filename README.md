@@ -136,15 +136,6 @@ For detailed information on specific topics, see our documentation:
 - **[Configuration Guide](docs/CONFIGURATION.md)** - Advanced configuration options and environment variables
 - **[Python Comparison](docs/PYTHON_COMPARISON.md)** - How this C# version matches the original Python implementation
 
-## 🤝 Contributing
-
-This solution follows Clean Architecture and CQRS principles. See our [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) guide for detailed information on:
-
-- Adding new features
-- Code standards and patterns
-- Testing guidelines
-- Project structure
-
 ---
 
 ## 🛠️ Common Issues and Solutions
@@ -202,3 +193,35 @@ This solution follows Clean Architecture and CQRS principles. See our [Technical
 | HTTP 413 | Payload Too Large | ✅ Auto-handled by intelligent batching |
 | HTTP 429 | Too Many Requests | Retry logic handles automatically |
 | HTTP 503 | Service Unavailable | Retry logic handles automatically |
+
+
+## Contributing
+
+This solution follows Clean Architecture and CQRS principles. See our [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) guide for detailed information on:
+
+- Adding new features
+- Code standards and patterns
+- Testing guidelines
+- Project structure
+
+This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
+the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide
+a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
+provided by the bot. You will only need to do this once across all repos using our CLA.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+## Trademarks
+
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
+trademarks or logos is subject to and must follow
+[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
+Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
+Any use of third-party trademarks or logos are subject to those third-party's policies.
+
+OSDU is a trademark of The Open Group.
