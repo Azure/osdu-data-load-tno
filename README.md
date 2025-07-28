@@ -21,6 +21,7 @@ Before you begin, ensure you have:
 
 - **.NET 9.0** or later installed
 - **Azure CLI** for authentication: `az login --tenant your-tenant-id`
+- [**Azure Developer CLI (azd)** for deployments](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd).
 - **OSDU Platform Access** with `users.datalake.ops` role
 - **Visual Studio** or **VS Code** (optional, for development)
 
@@ -36,7 +37,7 @@ Update `appsettings.json` in the `src/OSDU.DataLoad.Console/` directory with you
     "ClientId": "your-client-id", 
     "DataPartition": "your-data-partition",
     "LegalTag": "{DataPartition}-your-legal-tag",
-    "AclViewer": "data.default.viewers@{DataPartition}.dataservices.energ",
+    "AclViewer": "data.default.viewers@{DataPartition}.dataservices.energy",
     "AclOwner": "data.default.owners@{DataPartition}.dataservices.energy"
   }
 }
@@ -58,7 +59,6 @@ dotnet run -- help
 dotnet run -- download-tno --destination "~/osdu-data/tno"
 dotnet run -- load --source "~/osdu-data/tno"
 ```
-
 ## 📋 Available Commands
 
 ### Default Behavior (No Arguments)
@@ -145,6 +145,42 @@ The application expects the following directory structure (automatically created
 │               └── documents/
 ├── schema/                          # OSDU schema files
 └── templates/                       # Data templates
+```
+
+## ☁️ Azure Deployments
+
+### Configure Environment
+
+1. Create an azd environment
+
+    ```bash
+    azd init -e dev
+    ```
+
+2. Configure the environment variables
+
+    ```bash
+    azd env set OSDU_TenantId $(az account show --query tenantId -o tsv )
+    azd env set AZURE_SUBSCRIPTION_ID <Azure subscription id>
+    azd env set AZURE_LOCATION <Azure Region>
+    azd env set OSDU_BaseUrl <https://your-osdu-instance.com>
+    azd env set OSDU_ClientId <your-client-ID>
+    azd env set OSDU_DataPartition <your-data-partition>
+    azd env set OSDU_LegalTag <{DataPartition}-your-legal-tag>
+    azd env set OSDU_AclViewer <data.default.viewers@{DataPartition}.dataservices.energy>
+    azd env set OSDU_AclOwner <data.default.owners@{DataPartition}.dataservices.energy>
+    ```
+
+### Deploy the Infrastructure
+
+```bash
+azd provision
+```
+
+### Deploy the Application
+
+```bash
+azd deploy
 ```
 
 ## 📚 Additional Resources

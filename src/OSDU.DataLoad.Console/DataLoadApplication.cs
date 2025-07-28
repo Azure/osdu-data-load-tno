@@ -81,6 +81,12 @@ public class DataLoadApplication
             return -1;
         }
 
+        System.Console.WriteLine("🚀 OSDU Data Load TNO - Load Command");
+        System.Console.WriteLine($"📂 Source directory: {source}");
+        System.Console.WriteLine();
+        
+        DisplayConfigurationStatus();
+
         await LoadAllDataAsync(source);
         return 0;
     }
@@ -115,6 +121,13 @@ public class DataLoadApplication
             return -1;
         }
 
+        System.Console.WriteLine("📥 OSDU Data Load TNO - Download Command");
+        System.Console.WriteLine($"📂 Destination directory: {destination}");
+        System.Console.WriteLine($"🔄 Overwrite existing: {(overwrite ? "Yes" : "No")}");
+        System.Console.WriteLine();
+        
+        DisplayConfigurationStatus();
+
         await DownloadTnoDataAsync(destination, overwrite);
         return 0;
     }
@@ -130,6 +143,8 @@ public class DataLoadApplication
         System.Console.WriteLine("🚀 OSDU Data Load TNO - Default Mode");
         System.Console.WriteLine($"📂 Using default data directory: {defaultDataPath}");
         System.Console.WriteLine();
+        
+        DisplayConfigurationStatus();
 
         // Check if data already exists
         bool dataExists = CheckIfDataExists(defaultDataPath);
@@ -275,32 +290,8 @@ public class DataLoadApplication
         System.Console.WriteLine("  download-tno --destination \"C:\\Data\\open-test-data\"");
         System.Console.WriteLine("  load --source \"C:\\Data\\open-test-data\"");
         System.Console.WriteLine();
-        System.Console.WriteLine("Environment Variables:");
-        System.Console.WriteLine("  Configure OSDU settings using environment variables with OSDU_ prefix:");
-        System.Console.WriteLine($"  OSDU_BaseUrl       = {GetConfigValue("BaseUrl")}");
-        System.Console.WriteLine($"  OSDU_TenantId      = {GetConfigValue("TenantId")}");
-        System.Console.WriteLine($"  OSDU_ClientId      = {GetConfigValue("ClientId")}");
-        System.Console.WriteLine($"  OSDU_DataPartition = {GetConfigValue("DataPartition")}");
-        System.Console.WriteLine($"  OSDU_LegalTag      = {GetConfigValue("LegalTag")}");
-        System.Console.WriteLine($"  OSDU_AclViewer     = {GetConfigValue("AclViewer")}");
-        System.Console.WriteLine($"  OSDU_AclOwner      = {GetConfigValue("AclOwner")}");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Current Configuration Status:");
-        var baseUrl = GetConfigValue("BaseUrl");
-        var tenantId = GetConfigValue("TenantId");
-        var clientId = GetConfigValue("ClientId");
-        var dataPartition = GetConfigValue("DataPartition");
-        var legalTag = GetConfigValue("LegalTag");
-        var aclViewer = GetConfigValue("AclViewer");
-        var aclOwner= GetConfigValue("AclOwner");
-
-        System.Console.WriteLine($"  ✓ BaseUrl: {(IsConfigured(baseUrl) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ TenantId: {(IsConfigured(tenantId) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ ClientId: {(IsConfigured(clientId) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ DataPartition: {(IsConfigured(dataPartition) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ LegalTag: {(IsConfigured(legalTag) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ AclViewer: {(IsConfigured(aclViewer) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ ActOwner: {(IsConfigured(aclOwner) ? "✅ Configured" : "❌ Not configured")}");
+        
+        DisplayConfigurationStatus();
 
         return string.IsNullOrEmpty(error) ? 0 : -1;
     }
@@ -330,6 +321,37 @@ public class DataLoadApplication
     private static string GetDefaultDataPath()
     {
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
+    }
+
+    private void DisplayConfigurationStatus()
+    {
+        System.Console.WriteLine("Environment Variables:");
+        System.Console.WriteLine("  Configure OSDU settings using environment variables with OSDU_ prefix:");
+        System.Console.WriteLine($"  OSDU_BaseUrl       = {GetConfigValue("BaseUrl")}");
+        System.Console.WriteLine($"  OSDU_TenantId      = {GetConfigValue("TenantId")}");
+        System.Console.WriteLine($"  OSDU_ClientId      = {GetConfigValue("ClientId")}");
+        System.Console.WriteLine($"  OSDU_DataPartition = {GetConfigValue("DataPartition")}");
+        System.Console.WriteLine($"  OSDU_LegalTag      = {GetConfigValue("LegalTag")}");
+        System.Console.WriteLine($"  OSDU_AclViewer     = {GetConfigValue("AclViewer")}");
+        System.Console.WriteLine($"  OSDU_AclOwner      = {GetConfigValue("AclOwner")}");
+        System.Console.WriteLine();
+        System.Console.WriteLine("Current Configuration Status:");
+        var baseUrl = GetConfigValue("BaseUrl");
+        var tenantId = GetConfigValue("TenantId");
+        var clientId = GetConfigValue("ClientId");
+        var dataPartition = GetConfigValue("DataPartition");
+        var legalTag = GetConfigValue("LegalTag");
+        var aclViewer = GetConfigValue("AclViewer");
+        var aclOwner= GetConfigValue("AclOwner");
+
+        System.Console.WriteLine($"  ✓ BaseUrl: {(IsConfigured(baseUrl) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ TenantId: {(IsConfigured(tenantId) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ ClientId: {(IsConfigured(clientId) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ DataPartition: {(IsConfigured(dataPartition) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ LegalTag: {(IsConfigured(legalTag) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ AclViewer: {(IsConfigured(aclViewer) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ ActOwner: {(IsConfigured(aclOwner) ? "✅ Configured" : "❌ Not configured")}");
+
     }
 
     private async Task LoadAllDataAsync(string source)
