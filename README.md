@@ -26,7 +26,7 @@ Before you begin, ensure you have:
 
 ### 2. Configure the Application
 
-Update `appsettings.json` with your OSDU instance details:
+Update `appsettings.json` in the `src/OSDU.DataLoad.Console/` directory with your OSDU instance details:
 
 ```json
 {
@@ -47,40 +47,55 @@ Update `appsettings.json` with your OSDU instance details:
 ### 3. Build and Run
 
 ```bash
+# Navigate to the console project
+cd src/OSDU.DataLoad.Console
+
 # Build the solution
 dotnet build
 
-# Show available commands
-dotnet run help
-
-# Download test data (optional)
-dotnet run download-tno --destination "C:\data\tno"
-
-# Load all data types
-dotnet run load --source "C:\data\tno"
+# Run commands directly
+dotnet run -- help
+dotnet run -- download-tno --destination "~/osdu-data/tno"
+dotnet run -- load --source "~/osdu-data/tno"
 ```
 
 ## 📋 Available Commands
 
+### Default Behavior (No Arguments)
+```bash
+# Run without any arguments - downloads data if needed, then loads it
+dotnet run
+```
+When run without arguments, the application will:
+1. Check for TNO data in `~/osdu-data/tno/` (user home directory)
+2. Download the test data if not present (~2.2GB)
+3. Load all data types into OSDU platform automatically
+
+This is the **easiest way to get started** - just configure your OSDU settings and run!
+
 ### Help Command
 ```bash
-dotnet run help
+# From console project directory (recommended)
+dotnet run -- help
+
+# Or from src directory
+dotnet run --project OSDU.DataLoad.Console --working-directory OSDU.DataLoad.Console -- help
 ```
 Shows available commands, usage examples, and current configuration status.
 
 ### Download TNO Test Data
 ```bash
-# Download ~2.2GB of official test data
-dotnet run download-tno --destination "C:\data\tno"
+# Download ~2.2GB of official test data (from console project directory)
+dotnet run -- download-tno --destination "~/osdu-data/tno"
 
 # Overwrite existing data
-dotnet run download-tno --destination "C:\data\tno" --overwrite
+dotnet run -- download-tno --destination "~/osdu-data/tno" --overwrite
 ```
 
 ### Load Data
 ```bash
-# Load all TNO data types in dependency order
-dotnet run load --source "C:\data\tno"
+# Load all TNO data types in dependency order (from console project directory)
+dotnet run -- load --source "~/osdu-data/tno"
 ```
 
 The application automatically processes all data types in the correct order:
@@ -102,8 +117,13 @@ The application automatically processes all data types in the correct order:
 
 The application expects the following directory structure (automatically created by `dotnet run download-tno`):
 
+> **📁 Cross-Platform Default**: `~/osdu-data/tno/` resolves to:
+> - **Windows**: `C:\Users\{username}\osdu-data\tno`
+> - **Linux**: `/home/{username}/osdu-data/tno`  
+> - **macOS**: `/Users/{username}/osdu-data/tno`
+
 ```
-C:\data\tno\
+~/osdu-data/tno/                     # Default location (cross-platform)
 ├── datasets/                        # File data (Phase 3)
 │   ├── documents/                   # Document files
 │   ├── markers/                     # Marker data files  

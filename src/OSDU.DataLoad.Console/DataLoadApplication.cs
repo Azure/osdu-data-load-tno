@@ -33,8 +33,8 @@ public class DataLoadApplication
         {
             if (args.Length == 0)
             {
-                ShowHelp();
-                return 0;
+                // Default behavior: download data if needed, then load it
+                return await HandleDefaultCommand();
             }
 
             var command = args[0].ToLowerInvariant();
@@ -119,6 +119,116 @@ public class DataLoadApplication
         return 0;
     }
 
+    private async Task<int> HandleDefaultCommand()
+    {
+        // Use cross-platform default path
+        var defaultDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
+        
+        _logger.LogInformation("No command specified - running default behavior");
+        _logger.LogInformation("Default data path: {DefaultDataPath}", defaultDataPath);
+
+        System.Console.WriteLine("🚀 OSDU Data Load TNO - Default Mode");
+        System.Console.WriteLine($"📂 Using default data directory: {defaultDataPath}");
+        System.Console.WriteLine();
+
+        // Check if data already exists
+        bool dataExists = CheckIfDataExists(defaultDataPath);
+        
+        if (!dataExists)
+        {
+            System.Console.WriteLine("📥 TNO test data not found - downloading automatically...");
+            System.Console.WriteLine();
+
+            try
+            {
+                var downloadResult = await _mediator.Send(new DownloadTnoDataCommand
+                {
+                    DestinationPath = defaultDataPath,
+                    OverwriteExisting = false
+                });
+
+                DisplayDownloadResult(downloadResult);
+
+                if (!downloadResult.IsSuccess)
+                {
+                    System.Console.WriteLine("❌ Failed to download TNO data. Cannot proceed with load operation.");
+                    return -1;
+                }
+
+                System.Console.WriteLine();
+                System.Console.WriteLine("✅ Download completed successfully!");
+                System.Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during automatic TNO data download");
+                System.Console.WriteLine($"❌ Download failed: {ex.Message}");
+                return -1;
+            }
+        }
+        else
+        {
+            System.Console.WriteLine("✅ TNO test data found - proceeding with load operation...");
+            System.Console.WriteLine();
+        }
+
+        // Now run the load operation
+        System.Console.WriteLine("🔄 Starting data load operation...");
+        System.Console.WriteLine();
+
+        try
+        {
+            await LoadAllDataAsync(defaultDataPath);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during default load operation");
+            System.Console.WriteLine($"❌ Load operation failed: {ex.Message}");
+            return -1;
+        }
+    }
+
+    private bool CheckIfDataExists(string dataPath)
+    {
+        if (!Directory.Exists(dataPath))
+        {
+            _logger.LogDebug("Data directory does not exist: {DataPath}", dataPath);
+            return false;
+        }
+
+        // Check for key directories that indicate TNO data is present
+        var requiredDirectories = new[]
+        {
+            Path.Combine(dataPath, "manifests"),
+            Path.Combine(dataPath, "datasets"),
+            Path.Combine(dataPath, "TNO")
+        };
+
+        foreach (var dir in requiredDirectories)
+        {
+            if (!Directory.Exists(dir))
+            {
+                _logger.LogDebug("Required directory missing: {Directory}", dir);
+                return false;
+            }
+        }
+
+        // Check if there are any manifest files
+        var manifestsPath = Path.Combine(dataPath, "manifests");
+        var hasManifests = Directory.GetDirectories(manifestsPath).Any(d => 
+            Directory.GetFiles(d, "*.json").Length > 0);
+
+        if (!hasManifests)
+        {
+            _logger.LogDebug("No manifest files found in: {ManifestsPath}", manifestsPath);
+            return false;
+        }
+
+        _logger.LogDebug("TNO data appears to be present at: {DataPath}", dataPath);
+        return true;
+    }
+
     private int ShowHelp(string? error = null)
     {
         if (!string.IsNullOrEmpty(error))
@@ -128,6 +238,12 @@ public class DataLoadApplication
         }
 
         System.Console.WriteLine("OSDU Data Load TNO v1.0 - Loads TNO data into OSDU platform");
+        System.Console.WriteLine();
+        System.Console.WriteLine("Default Behavior (no arguments):");
+        System.Console.WriteLine("  When run without arguments, the application will:");
+        System.Console.WriteLine($"  1. Check for TNO data in {GetDefaultDataPath()}");
+        System.Console.WriteLine("  2. Download the data if not present");
+        System.Console.WriteLine("  3. Load all data types into OSDU platform");
         System.Console.WriteLine();
         System.Console.WriteLine("Commands:");
         System.Console.WriteLine("  load         Load all TNO data types into OSDU platform in the correct order");
@@ -155,6 +271,7 @@ public class DataLoadApplication
         System.Console.WriteLine("  download-tno --destination <path> --overwrite    Overwrite existing data");
         System.Console.WriteLine();
         System.Console.WriteLine("Examples:");
+        System.Console.WriteLine($"  dotnet run                           # Default: download data to {GetDefaultDataPath()} and load");
         System.Console.WriteLine("  download-tno --destination \"C:\\Data\\open-test-data\"");
         System.Console.WriteLine("  load --source \"C:\\Data\\open-test-data\"");
         System.Console.WriteLine();
@@ -208,6 +325,11 @@ public class DataLoadApplication
         return !string.IsNullOrEmpty(value) && 
                !value.StartsWith("your-", StringComparison.OrdinalIgnoreCase) &&
                value != "string.Empty";
+    }
+
+    private static string GetDefaultDataPath()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
     }
 
     private async Task LoadAllDataAsync(string source)
