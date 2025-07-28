@@ -154,6 +154,7 @@ The application expects the following directory structure (automatically created
 1. Create an azd environment
 
     ```bash
+    # Navigate to the project root
     azd init -e dev
     ```
 
@@ -173,15 +174,19 @@ The application expects the following directory structure (automatically created
 
 ### Deploy the Infrastructure
 
-```bash
-azd provision
-```
+  ```bash
+  azd provision
+  ```
+
+### Assign managed identity `users.datalake.ops` role
+
+Get the object ID of the managed identity and assign it `users.datalake.ops` on your data partition.
 
 ### Deploy the Application
 
-```bash
-azd deploy
-```
+  ```bash
+  azd deploy
+  ```
 
 ## 📚 Additional Resources
 
