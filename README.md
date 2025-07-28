@@ -127,7 +127,7 @@ C:\data\tno\
 └── templates/                       # Data templates
 ```
 
-## 🔧 Advanced Topics
+## 📚 Additional Resources
 
 For detailed information on specific topics, see our documentation:
 
@@ -145,16 +145,7 @@ This solution follows Clean Architecture and CQRS principles. See our [Technical
 - Testing guidelines
 - Project structure
 
-
 ---
-
-## 📚 Additional Resources
-
-- **[Data Loading Process](docs/DATA_LOAD_PROCESS.md)** - Complete workflow documentation
-- **[Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md)** - Detailed architecture information
-- **[Configuration Guide](docs/CONFIGURATION.md)** - Advanced configuration options
-- **[Python Comparison](docs/PYTHON_COMPARISON.md)** - C# vs Python implementation comparison
-
 
 ## 🛠️ Common Issues and Solutions
 
