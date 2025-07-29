@@ -43,3 +43,4 @@ module resources 'resources.bicep' = {
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = resources.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT
 output AZURE_RESOURCE_OSDU_DATALOAD_CONSOLE_ID string = resources.outputs.AZURE_RESOURCE_OSDU_DATALOAD_CONSOLE_ID
+output AZURE_RESOURCE_GROUP string = rg.name

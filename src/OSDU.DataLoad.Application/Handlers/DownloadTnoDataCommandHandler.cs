@@ -66,7 +66,11 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
 
             // Download the zip file
             _logger.LogInformation("Downloading TNO test data from {Url}", _configuration.TestDataUrl);
-            var tempFilePath = Path.Combine(Path.GetTempPath(), "open-test-data.zip");
+            
+            // Use container temp directory if available (set via TMPDIR/TEMP env vars)
+            var tempPath = GetTempDirectoryPath();
+            var tempFilePath = Path.Combine(tempPath, "open-test-data.zip");
+            _logger.LogInformation("Using temp file: {TempFilePath}", tempFilePath);
             
             try
             {
@@ -167,7 +171,8 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
     {
         _logger.LogInformation("Extracting ZIP archive");
         
-        var tempExtractDir = Path.Combine(Path.GetTempPath(), $"tno-extract-{Guid.NewGuid()}");
+        var tempExtractDir = Path.Combine(GetTempDirectoryPath(), $"tno-extract-{Guid.NewGuid()}");
+        _logger.LogInformation("Using temp extraction directory: {TempExtractDir}", tempExtractDir);
         
         try
         {
@@ -354,5 +359,20 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
             var destPath = Path.Combine(destDir, relativePath);
             fileMappings[file] = destPath;
         }
+    }
+
+    /// <summary>
+    /// Gets the optimal temp directory path, preferring container-mounted directories over system temp
+    /// </summary>
+    /// <returns>The best available temporary directory path</returns>
+    private string GetTempDirectoryPath()
+    {
+        // Prefer container temp directory (set via TMPDIR/TEMP env vars) over system temp
+        var tempPath = Environment.GetEnvironmentVariable("TMPDIR") 
+                    ?? Environment.GetEnvironmentVariable("TEMP") 
+                    ?? Path.GetTempPath();
+        
+        _logger.LogDebug("Using temp directory: {TempPath}", tempPath);
+        return tempPath;
     }
 }
