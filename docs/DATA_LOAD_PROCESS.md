@@ -11,7 +11,13 @@ graph TD
     A[CLI Input] --> B["load --source &lt;path&gt;"]
     
     B --> C[LoadAllDataCommand]
-    C --> D{For Each Data Type in Order}
+    C --> P[Prepare Stage]
+    P --> P1{UserEmail Configured?}
+    P1 -->|Yes| P2[AddUserToOpsGroup]
+    P1 -->|No| P3[Skip User Setup]
+    P2 --> P4[CreateLegalTag]
+    P3 --> P4
+    P4 --> D{For Each Data Type in Order}
     
     D --> E1[Reference Data]
     E1 --> E2[Misc Master Data]
@@ -42,15 +48,22 @@ graph TD
     L --> M[Display Complete Summary]
     
     style C fill:#e1f5fe
+    style P fill:#fff3e0
+    style P2 fill:#e8f5e8
+    style P4 fill:#e8f5e8
     style F fill:#ffebee
     style J fill:#e8f5e8
 ```
 
 ## Orchestrated Loading Order
 
-The solution automatically processes data types in dependency order:
+The solution automatically processes data in this order:
 
-1. **Reference Data** → Foundation data required by all other types
+### 0. **Prepare Stage** → Environment setup and prerequisites
+   - **User Authorization**: Adds configured user to `users.datalake.ops@{dataPartition}.dataservices.energy` group
+   - **Legal Tag Creation**: Creates the specified legal tag with standard compliance properties
+   
+### 1. **Reference Data** → Foundation data required by all other types
 2. **Misc Master Data** → Additional master data dependencies
 3. **Wells** → Well master data
 4. **Wellbores** → Wellbore master data (depends on wells)
@@ -66,6 +79,8 @@ The solution automatically processes data types in dependency order:
 ```mermaid
 sequenceDiagram
     participant CLI as CLI Application
+    participant LoadAll as LoadAllDataHandler
+    participant Prepare as Prepare Stage
     participant Load as LoadFromManifestHandler
     participant Discover as DiscoverFilesQuery
     participant Upload as UploadFilesCommand
@@ -73,7 +88,18 @@ sequenceDiagram
     participant Records as UploadRecordsCommand
     participant OSDU as OSDU Platform APIs
 
-    CLI->>Load: LoadFromManifestCommand(DataType)
+    CLI->>LoadAll: LoadAllDataCommand(SourcePath)
+    
+    Note over LoadAll,Prepare: Prepare Stage - Environment Setup
+    LoadAll->>Prepare: AddUserToOpsGroupCommand
+    Prepare->>OSDU: POST /api/entitlements/v2/groups/{group}/members
+    OSDU-->>Prepare: User added (or already exists)
+    LoadAll->>Prepare: CreateLegalTagCommand
+    Prepare->>OSDU: POST /api/legal/v1/legaltags
+    OSDU-->>Prepare: Legal tag created (or already exists)
+    
+    Note over LoadAll,Load: Data Loading Phase - For Each Data Type
+    LoadAll->>Load: LoadFromManifestCommand(DataType)
     Load->>Discover: DiscoverFilesQuery(DirectoryPath)
     Discover-->>Load: SourceFile[]
     
@@ -93,8 +119,60 @@ sequenceDiagram
     Note right of OSDU: /api/storage/v2/records<br/>/api/schema-service/v1/schema<br/>Max 500 records per batch
     OSDU-->>Records: Upload results
     Records-->>Load: Final results
-    Load-->>CLI: Complete LoadResult
+    Load-->>LoadAll: LoadResult per data type
+    LoadAll-->>CLI: Complete aggregated LoadResult
 ```
+
+## Prepare Stage Details
+
+The prepare stage ensures that the OSDU environment is properly configured before data loading begins. This stage includes user authorization setup and legal tag creation.
+
+### User Authorization Setup
+
+When `OSDU_USER_EMAIL` is configured, the application will:
+
+1. **Check User Authorization**: Adds the specified user to the data partition operations group
+2. **Group Pattern**: Uses the format `users.datalake.ops@{dataPartition}.dataservices.energy`
+3. **Conflict Handling**: Gracefully handles 409 responses when user is already in the group
+4. **Error Logging**: Provides detailed logging for authorization operations
+
+**Configuration Example:**
+```bash
+export OSDU_USER_EMAIL="john.doe@example.com"
+export OSDU_DATA_PARTITION="opendes"
+```
+
+This will add `john.doe@example.com` to the group `users.datalake.ops@opendes.dataservices.energy`.
+
+### Legal Tag Creation
+
+When `OSDU_LEGAL_TAG` is configured, the application will:
+
+1. **Create Legal Tag**: Creates a legal tag with the specified name
+2. **Default Properties**: Uses standard compliance settings:
+   - Countries of Origin: [US, CA]
+   - Contract ID: No Contract Related
+   - Data Type: Public Domain Data
+   - Export Classification: EAR99
+   - Originator: TNO
+   - Personal Data: No Personal Data
+
+3. **Conflict Handling**: Gracefully handles 409 responses when legal tag already exists
+4. **Validation**: Ensures legal tag is available for data record creation
+
+**Configuration Example:**
+```bash
+export OSDU_LEGAL_TAG="tno-geological-data-public"
+```
+
+### Error Handling
+
+The prepare stage implements robust error handling:
+
+- **409 Conflicts**: Treated as success conditions (resource already exists)
+- **API Failures**: Logged with detailed error information
+- **Continuation**: Data loading continues even if prepare stage encounters non-critical errors
+- **Validation**: Validates OSDU configuration before attempting operations
 
 ### 1. File Discovery Phase
 ```mermaid
