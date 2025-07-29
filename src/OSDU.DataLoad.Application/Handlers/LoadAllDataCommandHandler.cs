@@ -80,6 +80,24 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                 _logger.LogInformation("No user email configured, skipping user authorization setup");
             }
 
+            // Create legal tag if specified
+            _logger.LogInformation("Creating legal tag");
+            var createLegalTagResult = await _mediator.Send(new CreateLegalTagCommand
+            {
+                LegalTagName = _configuration.LegalTag
+            }, cancellationToken);
+
+            if (!createLegalTagResult.IsSuccess)
+            {
+                _logger.LogWarning("Failed to create legal tag, message: {Message}", createLegalTagResult.Message);
+                return new LoadResult
+                {
+                    IsSuccess = false,
+                    Message = $"Failed to create legal tag {createLegalTagResult.Message}",
+                    Duration = DateTime.UtcNow - startTime
+                };
+            }
+
             // Load data types in the correct order
             foreach (var dataType in DataLoadingOrder.LoadingSequence)
             {

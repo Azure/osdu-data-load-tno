@@ -41,4 +41,9 @@ public interface IOsduClient
     /// Adds a user to the OSDU data lake operations group (users.datalake.ops@{dataPartition}.dataservices.energy)
     /// </summary>
     Task<bool> AddUserToOpsGroupAsync(string dataPartition, string userEmail, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a legal tag in OSDU
+    /// </summary>
+    Task<bool> CreateLegalTagAsync(string legalTagName, CancellationToken cancellationToken = default);
 }

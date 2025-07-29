@@ -368,6 +368,72 @@ public class OsduHttpClient : IOsduClient, IDisposable
         }
     }
 
+    public async Task<bool> CreateLegalTagAsync(string legalTagName, CancellationToken cancellationToken = default)
+    {
+        if (!await EnsureAuthenticatedAsync(cancellationToken))
+        {
+            _logger.LogError("Authentication failed for creating legal tag");
+            return false;
+        }
+
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var endpoint = $"{_configuration.BaseUrl}/api/legal/v1/legaltags";
+                
+                var requestData = new
+                {
+                    name = legalTagName,
+                    description = "This tag is used by OSDU TNO Data Load",
+                    properties = new
+                    {
+                        countryOfOrigin = new[] { "US" },
+                        contractId = "A1234",
+                        expirationDate = "2099-01-25",
+                        originator = "MyCompany",
+                        dataType = "Transferred Data",
+                        securityClassification = "Public",
+                        personalData = "No Personal Data",
+                        exportClassification = "EAR99"
+                    }
+                };
+
+                var jsonContent = JsonSerializer.Serialize(requestData, _jsonOptions);
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                content.Headers.Add("data-partition-id", _configuration.DataPartition);
+
+                _logger.LogInformation("Creating legal tag {LegalTagName}", legalTagName);
+                
+                var response = await _httpClient.PostAsync(endpoint, content, cancellationToken);
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Successfully created legal tag {LegalTagName}", legalTagName);
+                    return true;
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+                {
+                    _logger.LogInformation("Legal tag {LegalTagName} already exists", legalTagName);
+                    return true;
+                }
+                else
+                {
+                    _logger.LogError("Failed to create legal tag {LegalTagName}. Status: {Status}, Response: {Response}", 
+                        legalTagName, response.StatusCode, responseContent);
+                    return false;
+                }
+
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating legal tag {LegalTagName}", legalTagName);
+            return false;
+        }
+    }
+
     public async Task<FileUploadResult> UploadFileAsync(string filePath, string fileName, string description, CancellationToken cancellationToken = default)
     {
         var correlationId = Guid.NewGuid().ToString("N")[..8]; // Short correlation ID
