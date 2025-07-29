@@ -221,6 +221,23 @@ For detailed information on specific topics, see our documentation:
 - **Network**: Check network connectivity and bandwidth to OSDU platform
 - **File Size**: Split large files into smaller chunks
 
+**Solutions**:
+- **Batch Size**: Consider reducing batch size (default 500 is optimal)
+- **Timeout**: Increase RequestTimeoutMs for large files
+- **Network**: Check network connectivity and bandwidth to OSDU platform
+- **File Size**: Split large files into smaller chunks
+
+### 3. File Upload - Metadata Issues
+**Symptoms**: The file is uploaded and metadata is created, but /v2/records/{id} returns 404
+```
+fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
+      [2e82ab6a] GET https://pm44a0805b33bc4.oep.ppe.azure-int.net/api/storage/v2/records/opendes:dataset--File.Generic:e4f2b1ee-2732-4259-ab47-d30ff4c2a095 failed with status NotFound
+fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
+      [2e82ab6a] Step 4 Failed: Could not retrieve record version for FileID: opendes:dataset--File.Generic:e4f2b1ee-2732-4259-ab47-d30ff4c2a095
+```
+**Solutions**:
+- Kill the OSDU-Storage pods
+
 ## Error Categories and Handling
 
 ### 1. Transient Errors (Retry with Exponential Backoff)

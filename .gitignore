@@ -445,3 +445,6 @@ TNO/
 tno-data/
 well-data/
 .azure
+
+**/launchSettings.json
+**/*.csproj.user

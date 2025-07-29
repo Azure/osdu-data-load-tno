@@ -17,8 +17,6 @@ public class FileMetadata
 public class FileMetadataResponse
 {
     public string? Id { get; set; }
-    public string? Kind { get; set; }
-    public Dictionary<string, object> Data { get; set; } = new();
 }
 
 /// <summary>
@@ -26,5 +24,5 @@ public class FileMetadataResponse
 /// </summary>
 public class StorageVersionsResponse
 {
-    public long[]? Versions { get; set; }
+    public long? Version { get; set; }
 }

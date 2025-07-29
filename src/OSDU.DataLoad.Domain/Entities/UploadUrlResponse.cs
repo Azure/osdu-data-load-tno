@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace OSDU.DataLoad.Domain.Entities;
 
 /// <summary>
@@ -5,7 +7,10 @@ namespace OSDU.DataLoad.Domain.Entities;
 /// </summary>
 public class UploadUrlResponse
 {
+    [JsonPropertyName("Location")]
     public UploadLocation? Location { get; set; }
+    
+    [JsonPropertyName("FileID")]
     public string? FileID { get; set; }
 }
 
@@ -14,6 +19,9 @@ public class UploadUrlResponse
 /// </summary>
 public class UploadLocation
 {
+    [JsonPropertyName("SignedURL")]
     public string? SignedURL { get; set; }
+    
+    [JsonPropertyName("FileSource")]
     public string? FileSource { get; set; }
 }

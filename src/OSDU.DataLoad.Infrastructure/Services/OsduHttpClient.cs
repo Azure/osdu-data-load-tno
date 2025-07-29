@@ -290,10 +290,32 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
     public async Task<FileUploadResult> UploadFileAsync(string filePath, string fileName, string description, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting upload for file: {FilePath}", filePath);
+        var correlationId = Guid.NewGuid().ToString("N")[..8]; // Short correlation ID
+        var fileSize = 0L;
+        
+        try
+        {
+            fileSize = new FileInfo(filePath).Length;
+        }
+        catch
+        {
+            // File size calculation failed, will be logged below
+        }
+
+        using var scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["CorrelationId"] = correlationId,
+            ["FileName"] = fileName,
+            ["FilePath"] = filePath,
+            ["FileSize"] = fileSize
+        });
+
+        _logger.LogInformation("[{CorrelationId}] Starting file upload - File: {FileName}, Size: {FileSize} bytes, Path: {FilePath}", 
+            correlationId, fileName, fileSize, filePath);
 
         if (!File.Exists(filePath))
         {
+            _logger.LogError("[{CorrelationId}] File not found: {FilePath}", correlationId, filePath);
             return new FileUploadResult
             {
                 IsSuccess = false,
@@ -303,6 +325,7 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
         if (!await EnsureAuthenticatedAsync(cancellationToken))
         {
+            _logger.LogError("[{CorrelationId}] Authentication failed for file upload", correlationId);
             return new FileUploadResult
             {
                 IsSuccess = false,
@@ -310,15 +333,18 @@ public class OsduHttpClient : IOsduClient, IDisposable
             };
         }
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             return await _retryPolicy.ExecuteAsync(async () =>
             {
                 // Step 1: Get upload URL from OSDU File API
-                _logger.LogDebug("Requesting upload URL for: {FilePath}", filePath);
-                var uploadUrlResponse = await GetUploadUrlAsync(cancellationToken);
+                _logger.LogInformation("[{CorrelationId}] Step 1: Requesting upload URL from OSDU File API", correlationId);
+                var uploadUrlResponse = await GetUploadUrlAsync(correlationId, cancellationToken);
                 if (uploadUrlResponse?.Location?.SignedURL == null || uploadUrlResponse.Location.FileSource == null)
                 {
+                    _logger.LogError("[{CorrelationId}] Step 1 Failed: No upload URL received from OSDU", correlationId);
                     return new FileUploadResult
                     {
                         IsSuccess = false,
@@ -326,19 +352,24 @@ public class OsduHttpClient : IOsduClient, IDisposable
                     };
                 }
 
-                _logger.LogDebug("Received signed URL for {FilePath}", filePath);
+                _logger.LogInformation("[{CorrelationId}] Step 1 Success: Received upload URL - FileID: {FileID}, FileSource: {FileSource}", 
+                    correlationId, uploadUrlResponse.FileID, uploadUrlResponse.Location.FileSource);
 
                 // Step 2: Upload file to Azure Blob Storage
-                _logger.LogDebug("Uploading file to blob: {FilePath}", filePath);
-                await UploadToBlobStorageAsync(filePath, uploadUrlResponse.Location.SignedURL, cancellationToken);
-                _logger.LogDebug("Blob upload completed for {FilePath}", filePath);
+                _logger.LogInformation("[{CorrelationId}] Step 2: Uploading file to Azure Blob Storage", correlationId);
+                var blobUploadStart = stopwatch.Elapsed;
+                await UploadToBlobStorageAsync(filePath, uploadUrlResponse.Location.SignedURL, correlationId, cancellationToken);
+                var blobUploadDuration = stopwatch.Elapsed - blobUploadStart;
+                _logger.LogInformation("[{CorrelationId}] Step 2 Success: Blob upload completed in {Duration}ms", 
+                    correlationId, blobUploadDuration.TotalMilliseconds);
 
                 // Step 3: Post file metadata to OSDU
-                _logger.LogDebug("Populating metadata for {FilePath}", filePath);
+                _logger.LogInformation("[{CorrelationId}] Step 3: Creating file metadata record in OSDU", correlationId);
                 var fileMetadata = CreateFileMetadata(uploadUrlResponse.Location.FileSource, fileName, description);
-                var metadataResponse = await PostFileMetadataAsync(fileMetadata, cancellationToken);
+                var metadataResponse = await PostFileMetadataAsync(fileMetadata, correlationId, cancellationToken);
                 if (metadataResponse?.Id == null)
                 {
+                    _logger.LogError("[{CorrelationId}] Step 3 Failed: No file ID received from metadata creation", correlationId);
                     return new FileUploadResult
                     {
                         IsSuccess = false,
@@ -346,11 +377,17 @@ public class OsduHttpClient : IOsduClient, IDisposable
                     };
                 }
 
+                _logger.LogInformation("[{CorrelationId}] Step 3 Success: File metadata created - FileID: {FileId}", 
+                    correlationId, metadataResponse.Id);
+
                 // Step 4: Get record version from storage API
-                _logger.LogDebug("Getting record version for {FilePath} with file ID: {FileId}", filePath, metadataResponse.Id);
-                var recordVersion = await GetRecordVersionAsync(metadataResponse.Id, cancellationToken);
+                _logger.LogInformation("[{CorrelationId}] Step 4: Retrieving record version from storage API - FileID: {FileId}", 
+                    correlationId, metadataResponse.Id);
+                var recordVersion = await GetRecordVersionAsync(metadataResponse.Id, correlationId, cancellationToken);
                 if (recordVersion == null)
                 {
+                    _logger.LogError("[{CorrelationId}] Step 4 Failed: Could not retrieve record version for FileID: {FileId}", 
+                        correlationId, metadataResponse.Id);
                     return new FileUploadResult
                     {
                         IsSuccess = false,
@@ -358,7 +395,9 @@ public class OsduHttpClient : IOsduClient, IDisposable
                     };
                 }
 
-                _logger.LogInformation("File upload completed: {FileName}", fileName);
+                stopwatch.Stop();
+                _logger.LogInformation("[{CorrelationId}] File upload completed successfully - FileID: {FileId}, Version: {Version}, Total Duration: {Duration}ms", 
+                    correlationId, metadataResponse.Id, recordVersion, stopwatch.ElapsedMilliseconds);
 
                 return new FileUploadResult
                 {
@@ -374,7 +413,9 @@ public class OsduHttpClient : IOsduClient, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "File Upload Failed: {FileName} Reason: {Reason}", fileName, ex.Message);
+            stopwatch.Stop();
+            _logger.LogError(ex, "[{CorrelationId}] File upload failed after {Duration}ms - File: {FileName}, Error: {ErrorMessage}", 
+                correlationId, stopwatch.ElapsedMilliseconds, fileName, ex.Message);
             return new FileUploadResult
             {
                 IsSuccess = false,
@@ -384,9 +425,11 @@ public class OsduHttpClient : IOsduClient, IDisposable
         }
     }
 
-    private async Task<UploadUrlResponse?> GetUploadUrlAsync(CancellationToken cancellationToken)
+    private async Task<UploadUrlResponse?> GetUploadUrlAsync(string correlationId, CancellationToken cancellationToken)
     {
         var endpoint = $"{_configuration.BaseUrl}/api/file/v2/files/uploadURL";
+        
+        _logger.LogDebug("[{CorrelationId}] Calling GET {Endpoint}", correlationId, endpoint);
         
         var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
         request.Headers.Add("data-partition-id", _configuration.DataPartition);
@@ -395,20 +438,34 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("/files/uploadURL failed with response {StatusCode}", response.StatusCode);
+            _logger.LogError("[{CorrelationId}] GET {Endpoint} failed with status {StatusCode}", 
+                correlationId, endpoint, response.StatusCode);
             return null;
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<UploadUrlResponse>(responseContent, _jsonOptions);
+        _logger.LogDebug("[{CorrelationId}] GET {Endpoint} response: {ResponseContent}", 
+            correlationId, endpoint, responseContent);
+            
+        var uploadLocation = JsonSerializer.Deserialize<UploadUrlResponse>(responseContent, _jsonOptions);
+        return uploadLocation;
+
     }
 
-    private async Task UploadToBlobStorageAsync(string filePath, string signedUrl, CancellationToken cancellationToken)
+    private async Task UploadToBlobStorageAsync(string filePath, string signedUrl, string correlationId, CancellationToken cancellationToken)
     {
+        _logger.LogDebug("[{CorrelationId}] Uploading to blob storage using signed URL", correlationId);
+        
         var blobClient = new BlobClient(new Uri(signedUrl));
         
         using var fileStream = File.OpenRead(filePath);
+        var fileSize = fileStream.Length;
+        
+        _logger.LogDebug("[{CorrelationId}] Starting blob upload - Size: {FileSize} bytes", correlationId, fileSize);
+        
         await blobClient.UploadAsync(fileStream, overwrite: true, cancellationToken: cancellationToken);
+        
+        _logger.LogDebug("[{CorrelationId}] Blob upload completed successfully", correlationId);
     }
 
     private FileMetadata CreateFileMetadata(string fileSource, string fileName, string description)
@@ -450,7 +507,7 @@ public class OsduHttpClient : IOsduClient, IDisposable
         };
     }
 
-    private async Task<FileMetadataResponse?> PostFileMetadataAsync(FileMetadata metadata, CancellationToken cancellationToken)
+    private async Task<FileMetadataResponse?> PostFileMetadataAsync(FileMetadata metadata, string correlationId, CancellationToken cancellationToken)
     {
         var endpoint = $"{_configuration.BaseUrl}/api/file/v2/files/metadata";
         
@@ -458,24 +515,32 @@ public class OsduHttpClient : IOsduClient, IDisposable
         var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
         content.Headers.Add("data-partition-id", _configuration.DataPartition);
 
-        _logger.LogInformation("Posting file metadata: {Metadata}", jsonContent);
+        _logger.LogDebug("[{CorrelationId}] Posting file metadata to {Endpoint}", correlationId, endpoint);
+        _logger.LogTrace("[{CorrelationId}] Metadata payload: {Metadata}", correlationId, jsonContent);
+        
         var response = await _httpClient.PostAsync(endpoint, content, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("/files/metadata failed with response {StatusCode} and body {ErrorContent}", 
-                response.StatusCode, errorContent);
+            _logger.LogError("[{CorrelationId}] POST {Endpoint} failed with status {StatusCode} - Error: {ErrorContent}", 
+                correlationId, endpoint, response.StatusCode, errorContent);
             return null;
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<FileMetadataResponse>(responseContent, _jsonOptions);
+        _logger.LogDebug("[{CorrelationId}] POST {Endpoint} response: {ResponseContent}", 
+            correlationId, endpoint, responseContent);
+            
+        var metadataResponse = JsonSerializer.Deserialize<FileMetadataResponse>(responseContent, _jsonOptions);
+        return metadataResponse;
     }
 
-    private async Task<long?> GetRecordVersionAsync(string fileId, CancellationToken cancellationToken)
+    private async Task<long?> GetRecordVersionAsync(string fileId, string correlationId, CancellationToken cancellationToken)
     {
-        var endpoint = $"{_configuration.BaseUrl}/api/storage/v2/records/{fileId}/versions";
+        var endpoint = $"{_configuration.BaseUrl}/api/storage/v2/records/{fileId}";
+        
+        _logger.LogDebug("[{CorrelationId}] Getting record version from {Endpoint}", correlationId, endpoint);
         
         var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
         request.Headers.Add("data-partition-id", _configuration.DataPartition);
@@ -484,15 +549,21 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("/storage/versions failed for file ID {FileId} with response {StatusCode}", 
-                fileId, response.StatusCode);
+            _logger.LogError("[{CorrelationId}] GET {Endpoint} failed with status {StatusCode}", 
+                correlationId, endpoint, response.StatusCode);
             return null;
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        _logger.LogDebug("[{CorrelationId}] GET {Endpoint} response: {ResponseContent}", 
+            correlationId, endpoint, responseContent);
+            
         var versionsResponse = JsonSerializer.Deserialize<StorageVersionsResponse>(responseContent, _jsonOptions);
         
-        return versionsResponse?.Versions?.FirstOrDefault();
+        var version = versionsResponse?.Version;
+        _logger.LogDebug("[{CorrelationId}] Retrieved record version: {Version}", correlationId, version);
+        
+        return version;
     }
 
     private string[] GetValidationErrors(DataRecord record)
