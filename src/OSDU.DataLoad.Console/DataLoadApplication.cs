@@ -31,65 +31,34 @@ public class DataLoadApplication
 
         try
         {
+            int exitCode;
             if (args.Length == 0)
             {
-                // Default behavior: download data if needed, then load it
-                return await HandleDefaultCommand();
+            // Default behavior: download data if needed, then load it
+            exitCode = await HandleDefaultCommand();
             }
-
+            else
+            {
             var command = args[0].ToLowerInvariant();
 
-            return command switch
+            exitCode = command switch
             {
                 "load" => await HandleLoadCommand(args),
                 "download-tno" => await HandleDownloadTnoCommand(args),
                 "help" or "--help" or "-h" => ShowHelp(),
                 _ => ShowHelp("Unknown command: " + command)
             };
-        }
-        catch (OperationCanceledException ex)
-        {
-            _logger.LogWarning(ex, "Operation was cancelled - this may be due to container shutdown or timeout");
-            System.Console.WriteLine("⚠️ Operation cancelled - container may be shutting down");
-            return 130; // Standard exit code for SIGINT
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Network/HTTP error occurred - this is recoverable");
-            System.Console.WriteLine($"🌐 Network error: {ex.Message}");
-            return 2; // Network error exit code
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogError(ex, "Authorization error - check credentials and permissions");
-            System.Console.WriteLine($"🔐 Authorization error: {ex.Message}");
-            return 3; // Authorization error exit code
-        }
-        catch (FileNotFoundException ex)
-        {
-            _logger.LogError(ex, "Required file not found");
-            System.Console.WriteLine($"📁 File not found: {ex.Message}");
-            return 4; // File not found exit code
-        }
-        catch (DirectoryNotFoundException ex)
-        {
-            _logger.LogError(ex, "Required directory not found");
-            System.Console.WriteLine($"📂 Directory not found: {ex.Message}");
-            return 5; // Directory not found exit code
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogError(ex, "Invalid operation - check configuration and data");
-            System.Console.WriteLine($"⚙️ Configuration error: {ex.Message}");
-            return 6; // Configuration error exit code
+            }
+
+            // Sleep forever if completed successfully
+            await Task.Delay(Timeout.Infinite);
+            return exitCode;
         }
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Unexpected application error occurred");
             System.Console.WriteLine($"❌ Unexpected error: {ex.Message}");
-            
-            // In container environments, avoid crashing by returning a specific error code
-            // This allows the orchestrator to handle the error appropriately
+            await Task.Delay(Timeout.Infinite);
             return 99; // General application error
         }
     }
@@ -247,7 +216,7 @@ public class DataLoadApplication
     {
         if (!Directory.Exists(dataPath))
         {
-            _logger.LogDebug("Data directory does not exist: {DataPath}", dataPath);
+            _logger.LogInformation("Data directory does not exist: {DataPath}", dataPath);
             return false;
         }
 
@@ -263,7 +232,7 @@ public class DataLoadApplication
         {
             if (!Directory.Exists(dir))
             {
-                _logger.LogDebug("Required directory missing: {Directory}", dir);
+                _logger.LogInformation("Required directory missing: {Directory}", dir);
                 return false;
             }
         }
@@ -275,11 +244,11 @@ public class DataLoadApplication
 
         if (!hasManifests)
         {
-            _logger.LogDebug("No manifest files found in: {ManifestsPath}", manifestsPath);
+            _logger.LogInformation("No manifest files found in: {ManifestsPath}", manifestsPath);
             return false;
         }
 
-        _logger.LogDebug("TNO data appears to be present at: {DataPath}", dataPath);
+        _logger.LogInformation("TNO data appears to be present at: {DataPath}", dataPath);
         return true;
     }
 
@@ -373,7 +342,19 @@ public class DataLoadApplication
         System.Console.WriteLine($"  OSDU_LegalTag      = {GetConfigValue("LegalTag")}");
         System.Console.WriteLine($"  OSDU_AclViewer     = {GetConfigValue("AclViewer")}");
         System.Console.WriteLine($"  OSDU_AclOwner      = {GetConfigValue("AclOwner")}");
+        System.Console.WriteLine($"  OSDU_UserEmail     = {GetConfigValue("UserEmail")}");
         System.Console.WriteLine();
+
+        _logger.LogInformation("Environment Variables:");
+        _logger.LogInformation("  OSDU_BaseUrl       = {BaseUrl}", GetConfigValue("BaseUrl"));
+        _logger.LogInformation("  OSDU_TenantId      = {TenantId}", GetConfigValue("TenantId"));
+        _logger.LogInformation("  OSDU_ClientId      = {ClientId}", GetConfigValue("ClientId"));
+        _logger.LogInformation("  OSDU_DataPartition = {DataPartition}", GetConfigValue("DataPartition"));
+        _logger.LogInformation("  OSDU_LegalTag      = {LegalTag}", GetConfigValue("LegalTag"));
+        _logger.LogInformation("  OSDU_AclViewer     = {AclViewer}", GetConfigValue("AclViewer"));
+        _logger.LogInformation("  OSDU_AclOwner      = {AclOwner}", GetConfigValue("AclOwner"));
+        _logger.LogInformation("  OSDU_UserEmail     = {UserEmail}", GetConfigValue("UserEmail"));
+
         System.Console.WriteLine("Current Configuration Status:");
         var baseUrl = GetConfigValue("BaseUrl");
         var tenantId = GetConfigValue("TenantId");
@@ -381,7 +362,8 @@ public class DataLoadApplication
         var dataPartition = GetConfigValue("DataPartition");
         var legalTag = GetConfigValue("LegalTag");
         var aclViewer = GetConfigValue("AclViewer");
-        var aclOwner= GetConfigValue("AclOwner");
+        var aclOwner = GetConfigValue("AclOwner");
+        var userEmail = GetConfigValue("UserEmail");
 
         System.Console.WriteLine($"  ✓ BaseUrl: {(IsConfigured(baseUrl) ? "✅ Configured" : "❌ Not configured")}");
         System.Console.WriteLine($"  ✓ TenantId: {(IsConfigured(tenantId) ? "✅ Configured" : "❌ Not configured")}");
@@ -390,7 +372,17 @@ public class DataLoadApplication
         System.Console.WriteLine($"  ✓ LegalTag: {(IsConfigured(legalTag) ? "✅ Configured" : "❌ Not configured")}");
         System.Console.WriteLine($"  ✓ AclViewer: {(IsConfigured(aclViewer) ? "✅ Configured" : "❌ Not configured")}");
         System.Console.WriteLine($"  ✓ ActOwner: {(IsConfigured(aclOwner) ? "✅ Configured" : "❌ Not configured")}");
+        System.Console.WriteLine($"  ✓ UserEmail: {(IsConfigured(userEmail) ? "✅ Configured (user will be added to ops group)" : "⚠️ Not configured (user authorization setup will be skipped)")}");
 
+        _logger.LogInformation("Current Configuration Status:");
+        _logger.LogInformation("  ✓ BaseUrl: {Status}", IsConfigured(baseUrl) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ TenantId: {Status}", IsConfigured(tenantId) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ ClientId: {Status}", IsConfigured(clientId) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ DataPartition: {Status}", IsConfigured(dataPartition) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ LegalTag: {Status}", IsConfigured(legalTag) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ AclViewer: {Status}", IsConfigured(aclViewer) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ ActOwner: {Status}", IsConfigured(aclOwner) ? "Configured" : "Not configured");
+        _logger.LogInformation("  ✓ UserEmail: {Status}", IsConfigured(userEmail) ? "Configured (user will be added to ops group)" : "Not configured (user authorization setup will be skipped)");
     }
 
     private async Task LoadAllDataAsync(string source)

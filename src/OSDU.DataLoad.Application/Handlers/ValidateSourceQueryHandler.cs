@@ -22,7 +22,7 @@ public class ValidateSourceQueryHandler : IRequestHandler<ValidateSourceQuery, V
 
     public async Task<ValidationResult> Handle(ValidateSourceQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Validating source file {FileName}", request.SourceFile.FileName);
+        _logger.LogInformation("Validating source file {FileName}", request.SourceFile.FileName);
 
         return await _dataTransformer.ValidateSourceAsync(request.SourceFile, cancellationToken);
     }

@@ -22,6 +22,7 @@ This document provides comprehensive configuration information for the OSDU Data
     "LegalTag": "osdu-tno-data",
     "AclViewer": "data.default.viewers@{DataPartition}.dataservices.energy",
     "AclOwner": "data.default.owners@{DataPartition}.dataservices.energy",
+    "UserEmail": "your-object-id",
     "RetryCount": 3,
     "RetryDelay": "00:00:02",
     "BatchSize": 500,
@@ -45,6 +46,7 @@ This document provides comprehensive configuration information for the OSDU Data
 | `LegalTag` | Legal tag for data compliance | _(required)_ | `OSDU_LegalTag` |
 | `AclViewer` | ACL viewer email/group | _(required)_ | `OSDU_AclViewer` |
 | `AclOwner` | ACL owner email/group | _(required)_ | `OSDU_AclOwner` |
+| `UserEmail` | User object id for ops group authorization | _(optional)_ | `OSDU_UserEmail` |
 | `RetryCount` | Number of retry attempts | `3` | `OSDU_RetryCount` |
 | `RetryDelay` | Delay between retries | `00:00:02` | `OSDU_RetryDelay` |
 | `BatchSize` | Records per batch | `500` | `OSDU_BatchSize` |
@@ -66,6 +68,7 @@ $env:OSDU_DataPartition = "your-data-partition"
 $env:OSDU_LegalTag = "your-legal-tag"
 $env:OSDU_AclViewer = "data.default.viewers@{DataPartition}.dataservices.energy"
 $env:OSDU_AclOwner = "data.default.owners@{DataPartition}.dataservices.energy"
+$env:OSDU_UserEmail = "your-object-id"
 $env:OSDU_TestDataUrl = "https://community.opengroup.org/osdu/data/open-test-data/-/archive/master/open-test-data-master.zip"
 ```
 
@@ -78,6 +81,7 @@ set OSDU_DataPartition=your-data-partition
 set OSDU_LegalTag=your-legal-tag
 set OSDU_AclViewer=data.default.viewers@{DataPartition}.dataservices.energy
 set OSDU_AclOwner=data.default.owners@{DataPartition}.dataservices.energy
+set OSDU_UserEmail=your-object-id
 set OSDU_TestDataUrl=https://community.opengroup.org/osdu/data/open-test-data/-/archive/master/open-test-data-master.zip
 ```
 
@@ -90,6 +94,7 @@ export OSDU_DataPartition="your-data-partition"
 export OSDU_LegalTag="your-legal-tag"
 export OSDU_AclViewer="data.default.viewers@{DataPartition}.dataservices.energy"
 export OSDU_AclOwner="data.default.owners@{DataPartition}.dataservices.energy"
+export OSDU_UserEmail="your-object-id"
 export OSDU_TestDataUrl="https://community.opengroup.org/osdu/data/open-test-data/-/archive/master/open-test-data-master.zip"
 ```
 
@@ -108,6 +113,7 @@ Add to `Properties/launchSettings.json`:
         "OSDU_LegalTag": "your-legal-tag",
         "OSDU_AclViewer": "data.default.viewers@{DataPartition}.dataservices.energy",
         "OSDU_AclOwner": "data.default.owners@{DataPartition}.dataservices.energy",
+        "OSDU_UserEmail": "your-object-id",
         "OSDU_TestDataUrl": "https://community.opengroup.org/osdu/data/open-test-data/-/archive/master/open-test-data-master.zip"
       }
     }

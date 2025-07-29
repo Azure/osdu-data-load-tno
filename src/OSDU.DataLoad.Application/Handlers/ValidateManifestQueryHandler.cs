@@ -22,7 +22,7 @@ public class ValidateManifestQueryHandler : IRequestHandler<ValidateManifestQuer
 
     public async Task<ValidationResult> Handle(ValidateManifestQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Validating manifest with {FileCount} files", 
+        _logger.LogInformation("Validating manifest with {FileCount} files", 
             request.Manifest.SourceFiles.Length);
 
         return await _manifestGenerator.ValidateManifestAsync(request.Manifest, cancellationToken);

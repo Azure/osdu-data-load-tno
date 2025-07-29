@@ -277,7 +277,7 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
         {
             var fullPath = Path.Combine(destinationDir, dir);
             Directory.CreateDirectory(fullPath);
-            _logger.LogDebug("Created directory: {Directory}", dir);
+            _logger.LogInformation("Created directory: {Directory}", dir);
         }
     }
 
@@ -348,7 +348,7 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
     {
         if (!Directory.Exists(sourceDir))
         {
-            _logger.LogDebug("Source directory does not exist: {SourceDir}", sourceDir);
+            _logger.LogInformation("Source directory does not exist: {SourceDir}", sourceDir);
             return;
         }
         
@@ -372,7 +372,7 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
                     ?? Environment.GetEnvironmentVariable("TEMP") 
                     ?? Path.GetTempPath();
         
-        _logger.LogDebug("Using temp directory: {TempPath}", tempPath);
+        _logger.LogInformation("Using temp directory: {TempPath}", tempPath);
         return tempPath;
     }
 }

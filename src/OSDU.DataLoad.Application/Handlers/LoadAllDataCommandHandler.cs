@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
 
@@ -12,11 +13,13 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
 {
     private readonly IMediator _mediator;
     private readonly ILogger<LoadAllDataCommandHandler> _logger;
+    private readonly OsduConfiguration _configuration;
 
-    public LoadAllDataCommandHandler(IMediator mediator, ILogger<LoadAllDataCommandHandler> logger)
+    public LoadAllDataCommandHandler(IMediator mediator, ILogger<LoadAllDataCommandHandler> logger, IOptions<OsduConfiguration> configuration)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configuration = configuration?.Value ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public async Task<LoadResult> Handle(LoadAllDataCommand request, CancellationToken cancellationToken)
@@ -56,6 +59,27 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
 
         try
         {
+            // Prepare stage: Add user to authorization group if specified
+            _logger.LogInformation("Starting prepare stage - checking for user authorization setup");
+            
+            if (!string.IsNullOrWhiteSpace(_configuration.UserEmail))
+            {
+                var addUserResult = await _mediator.Send(new AddUserToOpsGroupCommand
+                {
+                    DataPartition = _configuration.DataPartition,
+                    UserEmail = _configuration.UserEmail
+                }, cancellationToken);
+
+                if (!addUserResult.IsSuccess)
+                {
+                    _logger.LogWarning("Failed to add user to authorization group, but continuing with data load: {Message}", addUserResult.Message);
+                }
+            }
+            else
+            {
+                _logger.LogInformation("No user email configured, skipping user authorization setup");
+            }
+
             // Load data types in the correct order
             foreach (var dataType in DataLoadingOrder.LoadingSequence)
             {

@@ -21,7 +21,7 @@ public class GetSchemaQueryHandler : IRequestHandler<GetSchemaQuery, string>
 
     public async Task<string> Handle(GetSchemaQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Getting schema for kind: {Kind}", request.Kind);
+        _logger.LogInformation("Getting schema for kind: {Kind}", request.Kind);
 
         return await _osduClient.GetSchemaAsync(request.Kind, cancellationToken);
     }

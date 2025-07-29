@@ -36,4 +36,9 @@ public interface IOsduClient
     /// Uploads a file to OSDU following the complete workflow: get upload URL, upload to blob, post metadata, get version
     /// </summary>
     Task<FileUploadResult> UploadFileAsync(string filePath, string fileName, string description, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds a user to the OSDU data lake operations group (users.datalake.ops@{dataPartition}.dataservices.energy)
+    /// </summary>
+    Task<bool> AddUserToOpsGroupAsync(string dataPartition, string userEmail, CancellationToken cancellationToken = default);
 }

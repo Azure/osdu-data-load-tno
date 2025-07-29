@@ -22,7 +22,7 @@ public class TransformDataCommandHandler : IRequestHandler<TransformDataCommand,
 
     public async Task<DataRecord[]> Handle(TransformDataCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Transforming file {FileName} to {DataType} format", 
+        _logger.LogInformation("Transforming file {FileName} to {DataType} format", 
             request.SourceFile.FileName, request.DataType);
 
         return await _dataTransformer.TransformAsync(request.SourceFile, request.DataType, cancellationToken);

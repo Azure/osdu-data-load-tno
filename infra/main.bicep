@@ -9,6 +9,22 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
+param TenantId string
+
+param AclOwner string
+
+param AclViewer string
+
+param BaseUrl string
+
+param ClientId string
+
+param DataPartition string
+
+param LegalTag string
+
+param UserObjectId string = ''
+
 param osduDataloadConsoleExists bool
 
 @description('Id of the user or app to assign application roles')
@@ -38,6 +54,14 @@ module resources 'resources.bicep' = {
     tags: tags
     principalId: principalId
     osduDataloadConsoleExists: osduDataloadConsoleExists
+    TenantId: TenantId
+    AclOwner: AclOwner
+    AclViewer: AclViewer
+    BaseUrl: BaseUrl
+    ClientId: ClientId
+    DataPartition: DataPartition
+    LegalTag: LegalTag
+    UserObjectId: UserObjectId
   }
 }
 

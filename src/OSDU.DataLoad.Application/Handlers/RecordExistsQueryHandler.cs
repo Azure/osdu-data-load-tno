@@ -21,7 +21,7 @@ public class RecordExistsQueryHandler : IRequestHandler<RecordExistsQuery, bool>
 
     public async Task<bool> Handle(RecordExistsQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Checking if record exists: {RecordId}", request.RecordId);
+        _logger.LogInformation("Checking if record exists: {RecordId}", request.RecordId);
 
         return await _osduClient.RecordExistsAsync(request.RecordId, cancellationToken);
     }

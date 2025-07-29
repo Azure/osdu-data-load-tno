@@ -22,7 +22,7 @@ public class DiscoverFilesQueryHandler : IRequestHandler<DiscoverFilesQuery, Sou
 
     public async Task<SourceFile[]> Handle(DiscoverFilesQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Discovering {DataType} files in {DirectoryPath}", 
+        _logger.LogInformation("Discovering {DataType} files in {DirectoryPath}", 
             request.DataType, request.DirectoryPath);
 
         return await _fileProcessor.DiscoverFilesAsync(request.DirectoryPath, request.DataType, cancellationToken);

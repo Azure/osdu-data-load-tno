@@ -51,7 +51,7 @@ public class FileProcessor : IFileProcessor
                     };
 
                     sourceFiles.Add(sourceFile);
-                    _logger.LogDebug("Found file: {FileName} ({Size} bytes)", sourceFile.FileName, sourceFile.Size);
+                    _logger.LogInformation("Found file: {FileName} ({Size} bytes)", sourceFile.FileName, sourceFile.Size);
                 }
                 catch (Exception ex)
                 {

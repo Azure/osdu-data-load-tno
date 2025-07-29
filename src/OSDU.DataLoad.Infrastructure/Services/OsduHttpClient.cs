@@ -37,10 +37,20 @@ public class OsduHttpClient : IOsduClient, IDisposable
         _retryPolicy = retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy));
 
         // Initialize DefaultAzureCredential for authentication
-        _tokenCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
+        var options = new DefaultAzureCredentialOptions
         {
             TenantId = _configuration.TenantId
-        });
+        };
+
+        // If running in Azure with user-assigned managed identity, specify the client ID
+        var managedIdentityClientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+        if (!string.IsNullOrEmpty(managedIdentityClientId))
+        {
+            options.ManagedIdentityClientId = managedIdentityClientId;
+            _logger.LogInformation("Using user-assigned managed identity with client ID: {ClientId}", managedIdentityClientId);
+        }
+
+        _tokenCredential = new DefaultAzureCredential(options);
 
         _jsonOptions = new JsonSerializerOptions
         {
@@ -55,7 +65,7 @@ public class OsduHttpClient : IOsduClient, IDisposable
     {
         if (IsTokenValid())
         {
-            _logger.LogDebug("Using existing valid access token");
+            _logger.LogInformation("Using existing valid access token");
             return true;
         }
 
@@ -129,6 +139,17 @@ public class OsduHttpClient : IOsduClient, IDisposable
                         (recordArray.Length + _configuration.BatchSize - 1) / _configuration.BatchSize,
                         batch.Length);
 
+                    // Get fresh token for each batch to avoid expiration
+                    _accessToken = null;
+                    if (!await EnsureAuthenticatedAsync(cancellationToken))
+                    {
+                        _logger.LogError("Authentication failed before batch {BatchNumber}", (i / _configuration.BatchSize) + 1);
+                        aggregateResult.IsSuccess = false;
+                        aggregateResult.Message = "Authentication failed during batch processing";
+                        aggregateResult.FailedRecords += batch.Length;
+                        continue;
+                    }
+
                     var batchResult = await UploadRecordBatchAsync(batch, cancellationToken);
                     
                     // Aggregate results
@@ -181,14 +202,13 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
         var endpoint = $"{_configuration.BaseUrl}/api/storage/v2/records";
         var response = await _httpClient.PutAsync(endpoint, content, cancellationToken);
-
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (response.IsSuccessStatusCode)
         {
             var uploadResponse = JsonSerializer.Deserialize<UploadResponse>(responseContent, _jsonOptions);
             
-            _logger.LogDebug("Successfully uploaded batch: {SuccessCount} records, {FailCount} failed",
+            _logger.LogInformation("Successfully uploaded batch: {SuccessCount} records, {FailCount} failed",
                 uploadResponse?.RecordCount ?? batch.Length, 
                 uploadResponse?.FailedRecordIds?.Length ?? 0);
 
@@ -288,6 +308,66 @@ public class OsduHttpClient : IOsduClient, IDisposable
         }).ToArray();
     }
 
+    public async Task<bool> AddUserToOpsGroupAsync(string dataPartition, string userEmail, CancellationToken cancellationToken = default)
+    {
+        if (!await EnsureAuthenticatedAsync(cancellationToken))
+        {
+            _logger.LogError("Authentication failed for adding user to ops group");
+            return false;
+        }
+
+        var groupName = $"users.datalake.ops@{dataPartition}.dataservices.energy";
+
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var endpoint = $"{_configuration.BaseUrl}/api/entitlements/v2/groups/{groupName}/members";
+                
+                var requestData = new
+                {
+                    email = userEmail,
+                    role = "MEMBER"
+                };
+
+                var jsonContent = JsonSerializer.Serialize(requestData, _jsonOptions);
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                content.Headers.Add("data-partition-id", _configuration.DataPartition);
+
+                _logger.LogInformation("Adding user {UserEmail} to ops group {GroupName}", 
+                    userEmail, groupName);
+                
+                var response = await _httpClient.PostAsync(endpoint, content, cancellationToken);
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Successfully added user {UserEmail} to ops group {GroupName}", 
+                        userEmail, groupName);
+                    return true;
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+                {
+                    _logger.LogInformation("User {UserEmail} is already a member of ops group {GroupName}", 
+                        userEmail, groupName);
+                    return true;
+                }
+                else
+                {
+                    _logger.LogError("Failed to add user {UserEmail} to ops group {GroupName}. Status: {Status}, Response: {Response}", 
+                        userEmail, groupName, response.StatusCode, responseContent);
+                    return false;
+                }
+
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding user {UserEmail} to ops group {GroupName}", userEmail, groupName);
+            return false;
+        }
+    }
+
     public async Task<FileUploadResult> UploadFileAsync(string filePath, string fileName, string description, CancellationToken cancellationToken = default)
     {
         var correlationId = Guid.NewGuid().ToString("N")[..8]; // Short correlation ID
@@ -365,6 +445,18 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
                 // Step 3: Post file metadata to OSDU
                 _logger.LogInformation("[{CorrelationId}] Step 3: Creating file metadata record in OSDU", correlationId);
+                
+                // Ensure we have a valid token before posting metadata
+                if (!await EnsureAuthenticatedAsync(cancellationToken))
+                {
+                    _logger.LogError("[{CorrelationId}] Authentication failed before posting file metadata", correlationId);
+                    return new FileUploadResult
+                    {
+                        IsSuccess = false,
+                        Message = "Authentication failed before posting file metadata"
+                    };
+                }
+
                 var fileMetadata = CreateFileMetadata(uploadUrlResponse.Location.FileSource, fileName, description);
                 var metadataResponse = await PostFileMetadataAsync(fileMetadata, correlationId, cancellationToken);
                 if (metadataResponse?.Id == null)
@@ -429,22 +521,22 @@ public class OsduHttpClient : IOsduClient, IDisposable
     {
         var endpoint = $"{_configuration.BaseUrl}/api/file/v2/files/uploadURL";
         
-        _logger.LogDebug("[{CorrelationId}] Calling GET {Endpoint}", correlationId, endpoint);
+        _logger.LogInformation("[{CorrelationId}] Calling GET {Endpoint}", correlationId, endpoint);
         
         var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
         request.Headers.Add("data-partition-id", _configuration.DataPartition);
 
         var response = await _httpClient.SendAsync(request, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("[{CorrelationId}] GET {Endpoint} failed with status {StatusCode}", 
-                correlationId, endpoint, response.StatusCode);
+            _logger.LogError("[{CorrelationId}] GET {Endpoint} failed with status {StatusCode}, response body {responseContent}", 
+                correlationId, endpoint, response.StatusCode, responseContent);
             return null;
         }
 
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        _logger.LogDebug("[{CorrelationId}] GET {Endpoint} response: {ResponseContent}", 
+        _logger.LogInformation("[{CorrelationId}] GET {Endpoint} response: {ResponseContent}", 
             correlationId, endpoint, responseContent);
             
         var uploadLocation = JsonSerializer.Deserialize<UploadUrlResponse>(responseContent, _jsonOptions);
@@ -454,18 +546,18 @@ public class OsduHttpClient : IOsduClient, IDisposable
 
     private async Task UploadToBlobStorageAsync(string filePath, string signedUrl, string correlationId, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("[{CorrelationId}] Uploading to blob storage using signed URL", correlationId);
+        _logger.LogInformation("[{CorrelationId}] Uploading to blob storage using signed URL", correlationId);
         
         var blobClient = new BlobClient(new Uri(signedUrl));
         
         using var fileStream = File.OpenRead(filePath);
         var fileSize = fileStream.Length;
         
-        _logger.LogDebug("[{CorrelationId}] Starting blob upload - Size: {FileSize} bytes", correlationId, fileSize);
+        _logger.LogInformation("[{CorrelationId}] Starting blob upload - Size: {FileSize} bytes", correlationId, fileSize);
         
         await blobClient.UploadAsync(fileStream, overwrite: true, cancellationToken: cancellationToken);
         
-        _logger.LogDebug("[{CorrelationId}] Blob upload completed successfully", correlationId);
+        _logger.LogInformation("[{CorrelationId}] Blob upload completed successfully", correlationId);
     }
 
     private FileMetadata CreateFileMetadata(string fileSource, string fileName, string description)
@@ -515,7 +607,7 @@ public class OsduHttpClient : IOsduClient, IDisposable
         var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
         content.Headers.Add("data-partition-id", _configuration.DataPartition);
 
-        _logger.LogDebug("[{CorrelationId}] Posting file metadata to {Endpoint}", correlationId, endpoint);
+        _logger.LogInformation("[{CorrelationId}] Posting file metadata to {Endpoint}", correlationId, endpoint);
         _logger.LogTrace("[{CorrelationId}] Metadata payload: {Metadata}", correlationId, jsonContent);
         
         var response = await _httpClient.PostAsync(endpoint, content, cancellationToken);
@@ -529,7 +621,7 @@ public class OsduHttpClient : IOsduClient, IDisposable
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        _logger.LogDebug("[{CorrelationId}] POST {Endpoint} response: {ResponseContent}", 
+        _logger.LogInformation("[{CorrelationId}] POST {Endpoint} response: {ResponseContent}", 
             correlationId, endpoint, responseContent);
             
         var metadataResponse = JsonSerializer.Deserialize<FileMetadataResponse>(responseContent, _jsonOptions);
@@ -540,7 +632,7 @@ public class OsduHttpClient : IOsduClient, IDisposable
     {
         var endpoint = $"{_configuration.BaseUrl}/api/storage/v2/records/{fileId}";
         
-        _logger.LogDebug("[{CorrelationId}] Getting record version from {Endpoint}", correlationId, endpoint);
+        _logger.LogInformation("[{CorrelationId}] Getting record version from {Endpoint}", correlationId, endpoint);
         
         var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
         request.Headers.Add("data-partition-id", _configuration.DataPartition);
@@ -555,13 +647,13 @@ public class OsduHttpClient : IOsduClient, IDisposable
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        _logger.LogDebug("[{CorrelationId}] GET {Endpoint} response: {ResponseContent}", 
+        _logger.LogInformation("[{CorrelationId}] GET {Endpoint} response: {ResponseContent}", 
             correlationId, endpoint, responseContent);
             
         var versionsResponse = JsonSerializer.Deserialize<StorageVersionsResponse>(responseContent, _jsonOptions);
         
         var version = versionsResponse?.Version;
-        _logger.LogDebug("[{CorrelationId}] Retrieved record version: {Version}", correlationId, version);
+        _logger.LogInformation("[{CorrelationId}] Retrieved record version: {Version}", correlationId, version);
         
         return version;
     }

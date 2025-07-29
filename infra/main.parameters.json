@@ -13,6 +13,30 @@
       },
       "principalId": {
         "value": "${AZURE_PRINCIPAL_ID}"
+      },
+      "TenantId": {
+        "value": "${OSDU_TenantId}"
+      },
+      "AclOwner":{
+        "value": "${OSDU_AclOwner}"
+      },
+      "AclViewer":{
+        "value": "${OSDU_AclViewer}"
+      },
+      "BaseUrl":{
+        "value": "${OSDU_BaseUrl}"
+      },
+      "ClientId":{
+        "value": "${OSDU_ClientId}"
+      },
+      "DataPartition":{
+        "value": "${OSDU_DataPartition}"
+      },
+      "LegalTag":{
+        "value": "${OSDU_LegalTag}"
+      },
+      "UserObjectId":{
+        "value": "${OSDU_UserEmail"
       }
     }
 }

@@ -38,7 +38,8 @@ Update `appsettings.json` in the `src/OSDU.DataLoad.Console/` directory with you
     "DataPartition": "your-data-partition",
     "LegalTag": "{DataPartition}-your-legal-tag",
     "AclViewer": "data.default.viewers@{DataPartition}.dataservices.energy",
-    "AclOwner": "data.default.owners@{DataPartition}.dataservices.energy"
+    "AclOwner": "data.default.owners@{DataPartition}.dataservices.energy",
+    "UserEmail": "your-object-id" // Optional - assigns use users.datalake.ops if set
   }
 }
 ```

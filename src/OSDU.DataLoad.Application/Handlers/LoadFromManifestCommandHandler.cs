@@ -67,7 +67,7 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
             // Step 2: Transform all source files to OSDU records
             foreach (var sourceFile in request.Manifest.SourceFiles)
             {
-                _logger.LogDebug("Transforming file: {FileName}", sourceFile.FileName);
+                _logger.LogInformation("Transforming file: {FileName}", sourceFile.FileName);
                 
                 var records = await _mediator.Send(new TransformDataCommand
                 {

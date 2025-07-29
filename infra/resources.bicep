@@ -10,6 +10,22 @@ param osduDataloadConsoleExists bool
 @description('Id of the user or app to assign application roles')
 param principalId string
 
+param TenantId string
+
+param AclOwner string
+
+param AclViewer string
+
+param BaseUrl string
+
+param ClientId string
+
+param DataPartition string
+
+param LegalTag string
+
+param UserObjectId string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, location)
 
@@ -121,10 +137,6 @@ module osduDataloadConsole 'br/public:avm/res/app/container-app:0.8.0' = {
             name: 'AZURE_CLIENT_ID'
             value: osduDataloadConsoleIdentity.outputs.clientId
           }
-          {
-            name: 'PORT'
-            value: '8080'
-          }
           // Set temp directory to mounted volume
           {
             name: 'TMPDIR'
@@ -133,6 +145,38 @@ module osduDataloadConsole 'br/public:avm/res/app/container-app:0.8.0' = {
           {
             name: 'TEMP'
             value: '/tmp/data'
+          }
+          {
+            name: 'OSDU_TenantId'
+            value: TenantId
+          }
+          {
+            name: 'OSDU_AclOwner'
+            value: AclOwner
+          }
+          {
+            name: 'OSDU_AclViewer'
+            value: AclViewer
+          }
+          {
+            name: 'OSDU_BaseUrl'
+            value: BaseUrl
+          }
+          {
+            name: 'OSDU_ClientId'
+            value: ClientId
+          }
+          {
+            name: 'OSDU_DataPartition'
+            value: DataPartition
+          }
+          {
+            name: 'OSDU_LegalTag'
+            value: LegalTag
+          }
+          {
+            name: 'OSDU_UserEmail'
+            value: UserObjectId
           }
         ]
       }

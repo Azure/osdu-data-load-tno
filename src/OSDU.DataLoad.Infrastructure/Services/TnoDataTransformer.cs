@@ -641,7 +641,7 @@ public class TnoDataTransformer : IDataTransformer
         };
         
         records.Add(record);
-        _logger.LogDebug("Created well log record from LAS file: {FileName}", sourceFile.FileName);
+        _logger.LogInformation("Created well log record from LAS file: {FileName}", sourceFile.FileName);
         
         return records;
     }
@@ -703,7 +703,7 @@ public class TnoDataTransformer : IDataTransformer
         };
         
         records.Add(record);
-        _logger.LogDebug("Created well log record from DLIS file: {FileName}", sourceFile.FileName);
+        _logger.LogInformation("Created well log record from DLIS file: {FileName}", sourceFile.FileName);
         
         await Task.CompletedTask; // Make it properly async
         return records;
@@ -765,7 +765,7 @@ public class TnoDataTransformer : IDataTransformer
         };
         
         records.Add(record);
-        _logger.LogDebug("Created document record from file: {FileName}", sourceFile.FileName);
+        _logger.LogInformation("Created document record from file: {FileName}", sourceFile.FileName);
         
         await Task.CompletedTask; // Make it properly async
         return records;
