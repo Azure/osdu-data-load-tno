@@ -16,19 +16,68 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        IHost? host = null;
+        
         try
         {
-            var host = CreateHostBuilder(args).Build();
+            host = CreateHostBuilder(args).Build();
             
             using var scope = host.Services.CreateScope();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            
+            logger.LogInformation("OSDU Data Load TNO starting - Process ID: {ProcessId}, Args: [{Args}]", 
+                Environment.ProcessId, string.Join(", ", args));
+            
+            // Set up global exception handlers for container resilience
+            AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+            {
+                logger.LogCritical("Unhandled exception occurred: {Exception}", e.ExceptionObject);
+            };
+            
+            TaskScheduler.UnobservedTaskException += (sender, e) =>
+            {
+                logger.LogError("Unobserved task exception: {Exception}", e.Exception);
+                e.SetObserved(); // Prevent process termination
+            };
+            
             var app = scope.ServiceProvider.GetRequiredService<DataLoadApplication>();
             
-            return await app.RunAsync(args);
+            var result = await app.RunAsync(args);
+            
+            logger.LogInformation("OSDU Data Load TNO completed with exit code: {ExitCode}", result);
+            return result;
+        }
+        catch (OperationCanceledException ex)
+        {
+            // Handle cancellation gracefully (e.g., container shutdown)
+            var logger = host?.Services?.GetService<ILogger<Program>>();
+            logger?.LogWarning("Operation was cancelled - likely due to container shutdown: {Message}", ex.Message);
+            return 130; // Standard exit code for SIGINT
         }
         catch (Exception ex)
         {
-            System.Console.WriteLine($"Fatal error: {ex.Message}");
-            return -1;
+            // Prevent container crash by catching all exceptions
+            var logger = host?.Services?.GetService<ILogger<Program>>();
+            logger?.LogCritical(ex, "Fatal error occurred - preventing container crash: {Message}", ex.Message);
+            
+            // Log to console as backup in case logging isn't working
+            System.Console.WriteLine($"FATAL ERROR - Process ID {Environment.ProcessId}: {ex.Message}");
+            System.Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            
+            // Return non-zero exit code but don't let the process crash
+            return 1;
+        }
+        finally
+        {
+            try
+            {
+                host?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                // Even disposal should not crash the container
+                System.Console.WriteLine($"Error during cleanup: {ex.Message}");
+            }
         }
     }
 
@@ -79,8 +128,19 @@ public class Program
                 services.AddScoped<IManifestGenerator, ManifestGenerator>();
                 services.AddScoped<IRetryPolicy, ExponentialRetryPolicy>();
 
-                // Infrastructure services
-                services.AddHttpClient<IOsduClient, OsduHttpClient>();
+                // Infrastructure services with container-friendly configuration
+                services.AddHttpClient<IOsduClient, OsduHttpClient>()
+                    .ConfigureHttpClient(client =>
+                    {
+                        // Container-friendly timeouts
+                        client.Timeout = TimeSpan.FromMinutes(15); // Longer timeout for large uploads
+                    })
+                    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
+                    {
+                        // Enable retries and connection pooling for container resilience
+                        MaxConnectionsPerServer = 10,
+                    });
+                    
                 services.AddHttpClient(); // For general HTTP operations
                 
                 // Application
@@ -89,16 +149,35 @@ public class Program
             .ConfigureLogging((context, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddConsole();
-                logging.AddDebug();
+                
+                // Container-friendly logging
+                logging.AddConsole(options =>
+                {
+                    options.IncludeScopes = true;
+                    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+                });
+                
+                // Add structured logging for container environments
+                logging.AddJsonConsole(options =>
+                {
+                    options.IncludeScopes = true;
+                    options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+                });
                 
                 if (context.HostingEnvironment.IsDevelopment())
                 {
+                    logging.AddDebug();
                     logging.SetMinimumLevel(LogLevel.Debug);
                 }
                 else
                 {
+                    // Production/container environment
                     logging.SetMinimumLevel(LogLevel.Information);
                 }
+                
+                // Always log critical errors regardless of environment
+                logging.AddFilter("OSDU.DataLoad", LogLevel.Information);
+                logging.AddFilter("Microsoft", LogLevel.Warning);
+                logging.AddFilter("System", LogLevel.Warning);
             });
 }

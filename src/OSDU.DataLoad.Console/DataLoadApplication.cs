@@ -47,11 +47,50 @@ public class DataLoadApplication
                 _ => ShowHelp("Unknown command: " + command)
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Operation was cancelled - this may be due to container shutdown or timeout");
+            System.Console.WriteLine("⚠️ Operation cancelled - container may be shutting down");
+            return 130; // Standard exit code for SIGINT
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Network/HTTP error occurred - this is recoverable");
+            System.Console.WriteLine($"🌐 Network error: {ex.Message}");
+            return 2; // Network error exit code
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Authorization error - check credentials and permissions");
+            System.Console.WriteLine($"🔐 Authorization error: {ex.Message}");
+            return 3; // Authorization error exit code
+        }
+        catch (FileNotFoundException ex)
+        {
+            _logger.LogError(ex, "Required file not found");
+            System.Console.WriteLine($"📁 File not found: {ex.Message}");
+            return 4; // File not found exit code
+        }
+        catch (DirectoryNotFoundException ex)
+        {
+            _logger.LogError(ex, "Required directory not found");
+            System.Console.WriteLine($"📂 Directory not found: {ex.Message}");
+            return 5; // Directory not found exit code
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation - check configuration and data");
+            System.Console.WriteLine($"⚙️ Configuration error: {ex.Message}");
+            return 6; // Configuration error exit code
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Application error");
-            System.Console.WriteLine($"❌ Error: {ex.Message}");
-            return -1;
+            _logger.LogCritical(ex, "Unexpected application error occurred");
+            System.Console.WriteLine($"❌ Unexpected error: {ex.Message}");
+            
+            // In container environments, avoid crashing by returning a specific error code
+            // This allows the orchestrator to handle the error appropriately
+            return 99; // General application error
         }
     }
 
