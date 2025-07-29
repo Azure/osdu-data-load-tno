@@ -74,7 +74,7 @@ module osduDataloadConsole 'br/public:avm/res/app/container-app:0.8.0' = {
   name: 'osduDataloadConsole'
   params: {
     name: 'osdu-dataload-console'
-    ingressTargetPort: 8080
+    disableIngress: true
     scaleMinReplicas: 1
     scaleMaxReplicas: 10
     secrets: {
