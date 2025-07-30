@@ -3,7 +3,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using OSDU.DataLoad.Domain.Interfaces;
-using OSDU.DataLoad.Application.Services;
 using OSDU.DataLoad.Infrastructure.Services;
 using OSDU.DataLoad.Domain.Entities;
 
@@ -129,6 +128,9 @@ public class Program
                 services.AddScoped<IFileProcessor, FileProcessor>();
                 services.AddScoped<IManifestGenerator, ManifestGenerator>();
                 services.AddScoped<IRetryPolicy, ExponentialRetryPolicy>();
+                
+                // Progress reporting services
+                services.AddScoped<IManifestProgressReporter, ManifestProgressReporter>();
 
                 // Infrastructure services with container-friendly configuration
                 services.AddHttpClient<IOsduClient, OsduHttpClient>()

@@ -759,12 +759,160 @@ public class OsduHttpClient : IOsduClient, IDisposable
         return !string.IsNullOrEmpty(_accessToken) && DateTime.UtcNow < _tokenExpiry;
     }
 
+    /// <summary>
+    /// Submits a workflow request to OSDU (matches Python's send_request function)
+    /// This sends the manifest data to the workflow endpoint for processing
+    /// </summary>
+    public async Task<LoadResult> SubmitWorkflowAsync(object workflowRequest, CancellationToken cancellationToken = default)
+    {
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            _logger.LogInformation("Submitting workflow request to OSDU");
+
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                // Use a custom serializer that preserves exact property names for workflow requests
+                var serializeOptions = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = null, // Preserve original property names
+                    WriteIndented = false
+                };
+                var json = JsonSerializer.Serialize(workflowRequest, serializeOptions);
+                _logger.LogDebug("Workflow request payload: {Json}", json);
+
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                // Add required headers for OSDU API
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                content.Headers.Add("data-partition-id", _configuration.DataPartition);
+                
+                // Use the workflow endpoint - matches Python's WORKFLOW_URL
+                var workflowUrl = $"{_configuration.BaseUrl.TrimEnd('/')}/api/workflow/v1/workflow/Osdu_ingest/workflowRun";
+                _logger.LogDebug("Sending workflow request to: {Url}", workflowUrl);
+
+                var response = await _httpClient.PostAsync(workflowUrl, content, cancellationToken);
+
+                _logger.LogInformation("Workflow submission response: {StatusCode}", response.StatusCode);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogDebug("Workflow response: {Response}", responseContent);
+
+                    // Parse the response to extract runId if available
+                    var workflowResponse = JsonSerializer.Deserialize<Dictionary<string, object>>(responseContent);
+                    var runId = workflowResponse?.GetValueOrDefault("runId")?.ToString();
+
+                    return new LoadResult
+                    {
+                        IsSuccess = true,
+                        Message = $"Workflow submitted successfully. RunId: {runId}",
+                        ProcessedRecords = 1, // One workflow submitted
+                        SuccessfulRecords = 1,
+                        FailedRecords = 0,
+                        Duration = DateTime.UtcNow - startTime,
+                        RunId = runId
+                    };
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogError("Workflow submission failed: {StatusCode} - {ErrorContent}", 
+                        response.StatusCode, errorContent.Substring(0, Math.Min(250, errorContent.Length)));
+
+                    return new LoadResult
+                    {
+                        IsSuccess = false,
+                        Message = $"Workflow submission failed with status {response.StatusCode}",
+                        ProcessedRecords = 1,
+                        SuccessfulRecords = 0,
+                        FailedRecords = 1,
+                        Duration = DateTime.UtcNow - startTime,
+                        ErrorDetails = errorContent
+                    };
+                }
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error submitting workflow request to OSDU");
+            return new LoadResult
+            {
+                IsSuccess = false,
+                Message = "Workflow submission failed",
+                ProcessedRecords = 1,
+                SuccessfulRecords = 0,
+                FailedRecords = 1,
+                Duration = DateTime.UtcNow - startTime,
+                ErrorDetails = ex.Message
+            };
+        }
+    }
+
+    /// <summary>
+    /// Gets the status of a workflow run
+    /// </summary>
+    public async Task<WorkflowStatus> GetWorkflowStatusAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogDebug("Checking workflow status for runId: {RunId}", runId);
+
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                // Build the status URL - matches the curl example
+                var statusUrl = $"{_configuration.BaseUrl.TrimEnd('/')}/api/workflow/v1/workflow/Osdu_ingest/workflowRun/{runId}";
+                
+                // Add the data-partition-id header
+                var request = new HttpRequestMessage(HttpMethod.Get, statusUrl);
+                request.Headers.Add("data-partition-id", _configuration.DataPartition);
+
+                var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogDebug("Workflow status response: {Response}", responseContent);
+
+                    var status = JsonSerializer.Deserialize<WorkflowStatus>(responseContent, _jsonOptions);
+                    if (status != null)
+                    {
+                        return status;
+                    }
+                }
+
+                _logger.LogWarning("Failed to get workflow status for runId: {RunId}. Status: {StatusCode}", 
+                    runId, response.StatusCode);
+
+                // Return a failed status if we can't get the actual status
+                return new WorkflowStatus
+                {
+                    RunId = runId,
+                    Status = "failed",
+                    WorkflowId = "Osdu_ingest"
+                };
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking workflow status for runId: {RunId}", runId);
+            return new WorkflowStatus
+            {
+                RunId = runId,
+                Status = "failed",
+                WorkflowId = "Osdu_ingest"
+            };
+        }
+    }
+
     private void ConfigureHttpClient()
     {
         _httpClient.BaseAddress = new Uri(_configuration.BaseUrl);
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "OSDU-DataLoad-TNO/1.0");
-        _httpClient.Timeout = TimeSpan.FromMinutes(10);
+        // Timeout is configured at the HttpClient registration level (15 minutes)
     }
 
     public void Dispose()

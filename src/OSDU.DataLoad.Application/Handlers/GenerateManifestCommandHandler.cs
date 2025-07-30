@@ -7,7 +7,7 @@ using OSDU.DataLoad.Domain.Interfaces;
 namespace OSDU.DataLoad.Application.Handlers;
 
 /// <summary>
-/// Handler for generating manifests
+/// Handler for generating manifests with enhanced progress tracking
 /// </summary>
 public class GenerateManifestCommandHandler : IRequestHandler<GenerateManifestCommand, LoadingManifest>
 {
@@ -22,9 +22,16 @@ public class GenerateManifestCommandHandler : IRequestHandler<GenerateManifestCo
 
     public async Task<LoadingManifest> Handle(GenerateManifestCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Generating manifest for {FileCount} {DataType} files", 
+        _logger.LogInformation("🚀 Generating manifest for {FileCount} {DataType} files", 
             request.SourceFiles.Length, request.DataType);
 
-        return await _manifestGenerator.GenerateManifestAsync(request.SourceFiles, request.DataType, cancellationToken);
+        // Note: Progress reporter should be set up via dependency injection
+        // The ManifestGenerator will use its configured progress reporter if available
+
+        var result = await _manifestGenerator.GenerateManifestAsync(request.SourceFiles, request.DataType, cancellationToken);
+        
+        _logger.LogInformation("✅ Manifest generation completed for {DataType}", request.DataType);
+        
+        return result;
     }
 }

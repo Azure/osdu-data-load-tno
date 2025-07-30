@@ -12,6 +12,7 @@ public class LoadResult
     public int SuccessfulRecords { get; set; }
     public int FailedRecords { get; set; }
     public TimeSpan Duration { get; set; }
+    public string? RunId { get; set; }
 }
 
 /// <summary>
@@ -31,6 +32,7 @@ public class OsduConfiguration
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
     public int BatchSize { get; set; } = 500;
     public int RequestTimeoutMs { get; set; } = 30000;
+    public int FileUploadTimeoutMs { get; set; } = 300000; // 5 minutes for file uploads
     public string TestDataUrl { get; set; } = string.Empty;
     
     /// <summary>
@@ -149,10 +151,10 @@ public static class DataLoadingOrder
         { TnoDataType.MiscMasterData, "manifests/misc-master-data-manifests" },
         { TnoDataType.Wells, "manifests/master-well-data-manifests" },
         { TnoDataType.Wellbores, "manifests/master-wellbore-data-manifests" },
-        { TnoDataType.Documents, "datasets/documents" },
-        { TnoDataType.WellLogs, "datasets/well-logs" },
-        { TnoDataType.WellMarkers, "datasets/markers" },
-        { TnoDataType.WellboreTrajectories, "datasets/trajectories" },
+        { TnoDataType.Documents, "TNO/provided/TNO/work-products/documents" },
+        { TnoDataType.WellLogs, "TNO/provided/TNO/work-products/well logs" },
+        { TnoDataType.WellMarkers, "TNO/provided/TNO/work-products/markers" },
+        { TnoDataType.WellboreTrajectories, "TNO/provided/TNO/work-products/trajectories" },
         { TnoDataType.WorkProducts, "TNO/provided/TNO/work-products" }
     };
 }

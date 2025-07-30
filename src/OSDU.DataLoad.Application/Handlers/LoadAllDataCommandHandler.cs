@@ -98,10 +98,91 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                 };
             }
 
-            // Load data types in the correct order
-            foreach (var dataType in DataLoadingOrder.LoadingSequence)
+            // Step 1: Upload Dataset Files (corresponds to LoadFiles in Python)
+            //Only upload actual files -not reference / master data which are pure records
+            //_logger.LogInformation("Step 1: Uploading dataset files (documents, well-logs, markers, trajectories)");
+            //var uploadStartTime = DateTime.UtcNow;
+            //var uploadResult = await _mediator.Send(new UploadDatasetsCommand
+            //{
+            //    SourceDataPath = request.SourcePath,
+            //    OutputPath = Path.Combine(request.SourcePath, "output")
+            //}, cancellationToken);
+
+            //if (!uploadResult.IsSuccess)
+            //{
+            //    _logger.LogError("Dataset file upload failed: {Message}", uploadResult.Message);
+            //    return new LoadResult
+            //    {
+            //        IsSuccess = false,
+            //        Message = $"Dataset file upload failed: {uploadResult.Message}",
+            //        Duration = DateTime.UtcNow - startTime,
+            //        ErrorDetails = uploadResult.ErrorDetails
+            //    };
+            //}
+
+            //_logger.LogInformation("Step 1 completed in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} files uploaded",
+            //    DateTime.UtcNow - uploadStartTime, uploadResult.SuccessfulRecords, uploadResult.ProcessedRecords);
+
+            // Step 2: Generate Manifests(corresponds to GenerateManifests in Python)
+            _logger.LogInformation("Step 2: Generating manifests from CSV data");
+            var manifestStartTime = DateTime.UtcNow;
+            var manifestResult = await _mediator.Send(new GenerateManifestsCommand
             {
-                _logger.LogInformation("Starting load phase for {DataType}", dataType);
+                SourceDataPath = request.SourcePath,
+                OutputPath = request.SourcePath,
+                DataPartition = _configuration.DataPartition
+            }, cancellationToken);
+
+            if (!manifestResult.IsSuccess)
+            {
+                _logger.LogError("Manifest generation failed: {Message}", manifestResult.Message);
+                return new LoadResult
+                {
+                    IsSuccess = false,
+                    Message = $"Manifest generation failed: {manifestResult.Message}",
+                    Duration = DateTime.UtcNow - startTime,
+                    ErrorDetails = manifestResult.ErrorDetails
+                };
+            }
+
+            _logger.LogInformation("Step 2 completed in {Duration:mm\\:ss} - {SuccessfulRecords} manifest groups generated",
+                DateTime.UtcNow - manifestStartTime, manifestResult.SuccessfulRecords);
+
+            // Step 3: Load Master Data (Reference and Master Data manifests)
+            _logger.LogInformation("Step 3: Loading reference and master data manifests");
+            var masterDataStartTime = DateTime.UtcNow;
+            
+            var masterDataTypes = new[]
+            {
+                TnoDataType.ReferenceData,
+                TnoDataType.MiscMasterData,
+                TnoDataType.Wells,
+                TnoDataType.Wellbores
+            };
+
+            // Pre-scan to get total manifest counts for overall progress tracking
+            var totalManifestCounts = await GetTotalManifestCounts(request.SourcePath, masterDataTypes);
+            var overallProgress = new OverallProgress
+            {
+                TotalManifests = totalManifestCounts.Values.Sum(),
+                ProcessedManifests = 0,
+                SuccessfulManifests = 0,
+                FailedManifests = 0,
+                TypeCounts = totalManifestCounts,
+                StartTime = startTime // Use the operation start time
+            };
+
+            _logger.LogInformation("🔍 Overall progress initialization:");
+            foreach (var kvp in totalManifestCounts.Where(x => x.Value > 0))
+            {
+                _logger.LogInformation("  📋 {DataType}: {Count} manifests", kvp.Key, kvp.Value);
+            }
+            _logger.LogInformation("🎯 Total: {TotalCount} manifests to process across all types", overallProgress.TotalManifests);
+
+            foreach (var dataType in masterDataTypes)
+            {
+                var typeManifestCount = overallProgress.TypeCounts.GetValueOrDefault(dataType, 0);
+                _logger.LogInformation("🚀 Loading {DataType} master data ({Count} manifests)", dataType, typeManifestCount);
 
                 // Check if the subdirectory exists for this data type
                 var subdirectory = DataLoadingOrder.DirectoryMapping[dataType];
@@ -109,14 +190,14 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
 
                 if (!Directory.Exists(dataTypePath))
                 {
-                    _logger.LogWarning("Skipping {DataType} - directory not found: {Path}", dataType, dataTypePath);
+                    _logger.LogWarning("⚠️ Skipping {DataType} - directory not found: {Path}", dataType, dataTypePath);
                     continue;
                 }
 
                 // Load data for this type
                 var phaseStartTime = DateTime.UtcNow;
-                _logger.LogInformation("Loading {DataType} from {Path}", dataType, dataTypePath);
-
+                overallProgress.TypeStartTimes[dataType] = phaseStartTime;
+                
                 try
                 {
                     var result = await _mediator.Send(new LoadDataCommand
@@ -126,6 +207,11 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                     }, cancellationToken);
 
                     phaseResults.Add((dataType, result));
+
+                    // Update overall progress tracking
+                    overallProgress.ProcessedManifests += result.ProcessedRecords;
+                    overallProgress.SuccessfulManifests += result.SuccessfulRecords;
+                    overallProgress.FailedManifests += result.FailedRecords;
 
                     // Aggregate results
                     overallResult = new LoadResult
@@ -138,41 +224,169 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                     };
 
                     var phaseTime = DateTime.UtcNow - phaseStartTime;
-                    _logger.LogInformation("Completed {DataType} in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} records successful",
+                    overallProgress.TypeDurations[dataType] = phaseTime;
+                    
+                    // Enhanced progress reporting with visual indicators and ETA
+                    _logger.LogInformation("✅ Completed {DataType} in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} records successful", 
                         dataType, phaseTime, result.SuccessfulRecords, result.ProcessedRecords);
+                    
+                    var progressPercentage = overallProgress.TotalManifests > 0 
+                        ? (double)overallProgress.ProcessedManifests / overallProgress.TotalManifests * 100 
+                        : 0;
+                    
+                    var etaText = overallProgress.EstimatedTimeRemaining?.ToString(@"mm\:ss") ?? "unknown";
+                    
+                    _logger.LogInformation("📊 Overall Progress: {Percentage:F1}% | {Processed}/{Total} manifests | {Failed} failed | {Success} successful | ETA: {ETA}",
+                        progressPercentage, overallProgress.ProcessedManifests, overallProgress.TotalManifests, 
+                        overallProgress.FailedManifests, overallProgress.SuccessfulManifests, etaText);
 
                     if (!result.IsSuccess)
                     {
-                        _logger.LogWarning("Phase {DataType} completed with errors: {Message}", dataType, result.Message);
+                        _logger.LogError("❌ Master data loading failed for {DataType}: {Message}", dataType, result.Message);
+                        return new LoadResult
+                        {
+                            IsSuccess = false,
+                            Message = $"Master data loading failed for {dataType}: {result.Message}",
+                            Duration = DateTime.UtcNow - startTime,
+                            ErrorDetails = result.ErrorDetails,
+                            ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
+                            SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
+                            FailedRecords = overallResult.FailedRecords + result.FailedRecords
+                        };
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to load {DataType} from {Path}", dataType, dataTypePath);
+                    _logger.LogError(ex, "💥 Failed to load {DataType} from {Path}", dataType, dataTypePath);
                     
-                    var failedResult = new LoadResult
+                    return new LoadResult
                     {
                         IsSuccess = false,
-                        Message = $"Error loading {dataType}: {ex.Message}",
-                        Duration = DateTime.UtcNow - phaseStartTime
-                    };
-                    
-                    phaseResults.Add((dataType, failedResult));
-                    overallResult = new LoadResult
-                    {
-                        IsSuccess = false,
+                        Message = $"Critical error loading {dataType}: {ex.Message}",
+                        Duration = DateTime.UtcNow - startTime,
+                        ErrorDetails = ex.Message,
                         ProcessedRecords = overallResult.ProcessedRecords,
                         SuccessfulRecords = overallResult.SuccessfulRecords,
-                        FailedRecords = overallResult.FailedRecords,
-                        Duration = overallResult.Duration,
-                        Message = overallResult.Message,
-                        ErrorDetails = overallResult.ErrorDetails
+                        FailedRecords = overallResult.FailedRecords + 1
                     };
                 }
             }
 
-            // Generate summary message
+            _logger.LogInformation("🏁 Step 3 completed in {Duration:mm\\:ss}", DateTime.UtcNow - masterDataStartTime);
+            
+            // Step 4: Load Work Products (using file location maps from step 1)
+            //_logger.LogInformation("Step 4: Loading work product manifests");
+            //var workProductStartTime = DateTime.UtcNow;
+            
+            //var workProductTypes = new[]
+            //{
+            //    TnoDataType.Documents,
+            //    TnoDataType.WellLogs,
+            //    TnoDataType.WellMarkers,
+            //    TnoDataType.WellboreTrajectories
+            //};
+
+            //var outputPath = Path.Combine(request.SourcePath, "output");
+            //var fileLocationMappings = new Dictionary<TnoDataType, string>
+            //{
+            //    { TnoDataType.Documents, Path.Combine(outputPath, "loaded-documents-datasets.json") },
+            //    { TnoDataType.WellLogs, Path.Combine(outputPath, "loaded-welllogs-datasets.json") },
+            //    { TnoDataType.WellMarkers, Path.Combine(outputPath, "loaded-marker-datasets.json") },
+            //    { TnoDataType.WellboreTrajectories, Path.Combine(outputPath, "loaded-trajectories-datasets.json") }
+            //};
+
+            //foreach (var dataType in workProductTypes)
+            //{
+            //    _logger.LogInformation("Loading {DataType} work products", dataType);
+
+            //    // Check if the subdirectory exists for this data type
+            //    var subdirectory = DataLoadingOrder.DirectoryMapping[dataType];
+            //    var dataTypePath = Path.Combine(request.SourcePath, subdirectory);
+
+            //    if (!Directory.Exists(dataTypePath))
+            //    {
+            //        _logger.LogWarning("Skipping {DataType} - directory not found: {Path}", dataType, dataTypePath);
+            //        continue;
+            //    }
+
+            //    // Check if file location mapping exists
+            //    var fileLocationMap = fileLocationMappings.GetValueOrDefault(dataType);
+            //    if (string.IsNullOrEmpty(fileLocationMap) || !File.Exists(fileLocationMap))
+            //    {
+            //        _logger.LogWarning("Skipping {DataType} - file location mapping not found: {Map}", dataType, fileLocationMap);
+            //        continue;
+            //    }
+
+            //    // Load data for this type
+            //    var phaseStartTime = DateTime.UtcNow;
+                
+            //    try
+            //    {
+            //        // For work products, we need to pass the file location mapping
+            //        var result = await _mediator.Send(new LoadFromManifestCommand
+            //        {
+            //            SourcePath = dataTypePath,
+            //            DataType = dataType,
+            //            FileLocationMapPath = fileLocationMap,
+            //            IsWorkProduct = true
+            //        }, cancellationToken);
+
+            //        phaseResults.Add((dataType, result));
+
+            //        // Aggregate results
+            //        overallResult = new LoadResult
+            //        {
+            //            IsSuccess = overallResult.IsSuccess && result.IsSuccess,
+            //            ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
+            //            SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
+            //            FailedRecords = overallResult.FailedRecords + result.FailedRecords,
+            //            Duration = DateTime.UtcNow - startTime
+            //        };
+
+            //        var phaseTime = DateTime.UtcNow - phaseStartTime;
+            //        _logger.LogInformation("Completed {DataType} work products in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} records successful",
+            //            dataType, phaseTime, result.SuccessfulRecords, result.ProcessedRecords);
+
+            //        if (!result.IsSuccess)
+            //        {
+            //            _logger.LogError("Work product loading failed for {DataType}: {Message}", dataType, result.Message);
+            //            return new LoadResult
+            //            {
+            //                IsSuccess = false,
+            //                Message = $"Work product loading failed for {dataType}: {result.Message}",
+            //                Duration = DateTime.UtcNow - startTime,
+            //                ErrorDetails = result.ErrorDetails,
+            //                ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
+            //                SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
+            //                FailedRecords = overallResult.FailedRecords + result.FailedRecords
+            //            };
+            //        }
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        _logger.LogError(ex, "Failed to load {DataType} work products from {Path}", dataType, dataTypePath);
+                    
+            //        return new LoadResult
+            //        {
+            //            IsSuccess = false,
+            //            Message = $"Critical error loading {dataType} work products: {ex.Message}",
+            //            Duration = DateTime.UtcNow - startTime,
+            //            ErrorDetails = ex.Message,
+            //            ProcessedRecords = overallResult.ProcessedRecords,
+            //            SuccessfulRecords = overallResult.SuccessfulRecords,
+            //            FailedRecords = overallResult.FailedRecords + 1
+            //        };
+            //    }
+            //}
+
+            //_logger.LogInformation("Step 4 completed in {Duration:mm\\:ss}", DateTime.UtcNow - workProductStartTime);
+
+            // Generate summary message and enhanced completion report
             var summary = GenerateSummaryMessage(phaseResults, overallResult);
+            
+            // Log comprehensive completion summary
+            LogCompletionSummary(overallResult, overallProgress, phaseResults, DateTime.UtcNow - startTime);
+            
             overallResult = new LoadResult
             {
                 IsSuccess = overallResult.IsSuccess,
@@ -184,7 +398,7 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                 ErrorDetails = overallResult.ErrorDetails
             };
 
-            _logger.LogInformation("Completed TNO data load operation in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} total records successful",
+            _logger.LogInformation("🎉 Completed TNO data load operation in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} total records successful",
                 overallResult.Duration, overallResult.SuccessfulRecords, overallResult.ProcessedRecords);
 
             return overallResult;
@@ -228,5 +442,185 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
         }
 
         return string.Join(Environment.NewLine, summary);
+    }
+
+    /// <summary>
+    /// Log comprehensive completion summary with enhanced visual formatting
+    /// </summary>
+    private void LogCompletionSummary(LoadResult overallResult, OverallProgress overallProgress, 
+        List<(TnoDataType dataType, LoadResult result)> phaseResults, TimeSpan totalDuration)
+    {
+        var icon = overallResult.IsSuccess ? "✅" : "❌";
+        var status = overallResult.IsSuccess ? "SUCCESS" : "FAILED";
+        
+        _logger.LogInformation("");
+        _logger.LogInformation("═══════════════════════════════════════════════════════════");
+        _logger.LogInformation("{Icon} TNO DATA LOAD COMPLETE", icon);
+        _logger.LogInformation("═══════════════════════════════════════════════════════════");
+        _logger.LogInformation("");
+        
+        // Overall results
+        _logger.LogInformation("📊 Overall Results:");
+        _logger.LogInformation("   Status: {Status}", status);
+        _logger.LogInformation("   Total Duration: {Duration:mm\\:ss\\.fff}", totalDuration);
+        _logger.LogInformation("   Data Types Processed: {Count}", phaseResults.Count);
+        _logger.LogInformation("");
+        
+        // Record statistics
+        _logger.LogInformation("📈 Record Processing:");
+        _logger.LogInformation("   Total Records: {Total:N0}", overallResult.ProcessedRecords);
+        _logger.LogInformation("   Successful Records: {Successful:N0}", overallResult.SuccessfulRecords);
+        _logger.LogInformation("   Failed Records: {Failed:N0}", overallResult.FailedRecords);
+        if (overallResult.ProcessedRecords > 0)
+        {
+            var successRate = (double)overallResult.SuccessfulRecords / overallResult.ProcessedRecords;
+            _logger.LogInformation("   Success Rate: {Rate:P1}", successRate);
+        }
+        _logger.LogInformation("");
+        
+        // Manifest statistics
+        _logger.LogInformation("📋 Manifest Processing:");
+        _logger.LogInformation("   Total Manifests: {Total:N0}", overallProgress.TotalManifests);
+        _logger.LogInformation("   Processed Manifests: {Processed:N0}", overallProgress.ProcessedManifests);
+        _logger.LogInformation("   Successful Manifests: {Successful:N0}", overallProgress.SuccessfulManifests);
+        _logger.LogInformation("   Failed Manifests: {Failed:N0}", overallProgress.FailedManifests);
+        _logger.LogInformation("");
+        
+        // Performance metrics
+        if (totalDuration.TotalSeconds > 0)
+        {
+            var recordsPerSecond = overallResult.ProcessedRecords / totalDuration.TotalSeconds;
+            var manifestsPerSecond = overallProgress.ProcessedManifests / totalDuration.TotalSeconds;
+            
+            _logger.LogInformation("⚡ Performance Metrics:");
+            _logger.LogInformation("   Records/Second: {Rate:N1}", recordsPerSecond);
+            _logger.LogInformation("   Manifests/Second: {Rate:N1}", manifestsPerSecond);
+            if (totalDuration.TotalMinutes > 1)
+            {
+                _logger.LogInformation("   Avg Time per 1000 Records: {Time:ss\\.f}s", 
+                    TimeSpan.FromSeconds(totalDuration.TotalSeconds / overallResult.ProcessedRecords * 1000));
+            }
+            _logger.LogInformation("");
+        }
+        
+        // Data type breakdown
+        _logger.LogInformation("📂 Data Type Breakdown:");
+        foreach (var (dataType, result) in phaseResults.OrderBy(x => x.dataType.ToString()))
+        {
+            var typeIcon = result.IsSuccess ? "✅" : "❌";
+            var typeSuccessRate = result.ProcessedRecords > 0 
+                ? (double)result.SuccessfulRecords / result.ProcessedRecords * 100 
+                : 0;
+            
+            _logger.LogInformation("   {Icon} {DataType}: {Success}/{Total} records ({Rate:F1}%) in {Duration:mm\\:ss}",
+                typeIcon, dataType, result.SuccessfulRecords, result.ProcessedRecords, 
+                typeSuccessRate, result.Duration);
+        }
+        
+        // Error summary if any failures
+        if (overallResult.FailedRecords > 0 || !overallResult.IsSuccess)
+        {
+            _logger.LogInformation("");
+            _logger.LogWarning("⚠️ Issues Summary:");
+            
+            if (overallResult.FailedRecords > 0)
+            {
+                _logger.LogWarning("   Total Failed Records: {Failed:N0}", overallResult.FailedRecords);
+            }
+            
+            var failedTypes = phaseResults.Where(x => !x.result.IsSuccess || x.result.FailedRecords > 0);
+            foreach (var (dataType, result) in failedTypes)
+            {
+                if (!result.IsSuccess)
+                {
+                    _logger.LogWarning("   ❌ {DataType}: Operation failed - {Message}", dataType, result.Message);
+                }
+                else if (result.FailedRecords > 0)
+                {
+                    _logger.LogWarning("   ⚠️ {DataType}: {Failed} failed records out of {Total}", 
+                        dataType, result.FailedRecords, result.ProcessedRecords);
+                }
+            }
+        }
+        
+        _logger.LogInformation("");
+        _logger.LogInformation("═══════════════════════════════════════════════════════════");
+        _logger.LogInformation("");
+    }
+
+    /// <summary>
+    /// Pre-scan all directories to count total manifests for progress tracking
+    /// </summary>
+    private async Task<Dictionary<TnoDataType, int>> GetTotalManifestCounts(string sourcePath, TnoDataType[] dataTypes)
+    {
+        var counts = new Dictionary<TnoDataType, int>();
+
+        foreach (var dataType in dataTypes)
+        {
+            try
+            {
+                var subdirectory = DataLoadingOrder.DirectoryMapping[dataType];
+                var dataTypePath = Path.Combine(sourcePath, subdirectory);
+
+                if (Directory.Exists(dataTypePath))
+                {
+                    var manifestFiles = Directory.GetFiles(dataTypePath, "*.json", SearchOption.AllDirectories);
+                    counts[dataType] = manifestFiles.Length;
+                }
+                else
+                {
+                    counts[dataType] = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error counting manifests for {DataType}", dataType);
+                counts[dataType] = 0;
+            }
+        }
+
+        return counts;
+    }
+
+    /// <summary>
+    /// Enhanced helper class to track overall progress across all data types
+    /// </summary>
+    private class OverallProgress
+    {
+        public int TotalManifests { get; set; }
+        public int ProcessedManifests { get; set; }
+        public int SuccessfulManifests { get; set; }
+        public int FailedManifests { get; set; }
+        public Dictionary<TnoDataType, int> TypeCounts { get; set; } = new();
+        
+        // Additional metrics for enhanced tracking
+        public DateTime StartTime { get; set; } = DateTime.UtcNow;
+        public Dictionary<TnoDataType, DateTime> TypeStartTimes { get; set; } = new();
+        public Dictionary<TnoDataType, TimeSpan> TypeDurations { get; set; } = new();
+        
+        /// <summary>
+        /// Calculate overall completion percentage
+        /// </summary>
+        public double CompletionPercentage => TotalManifests > 0 
+            ? (double)ProcessedManifests / TotalManifests * 100 
+            : 0;
+        
+        /// <summary>
+        /// Calculate estimated time remaining based on current processing rate
+        /// </summary>
+        public TimeSpan? EstimatedTimeRemaining
+        {
+            get
+            {
+                if (ProcessedManifests == 0 || TotalManifests == 0 || ProcessedManifests >= TotalManifests)
+                    return null;
+                
+                var elapsed = DateTime.UtcNow - StartTime;
+                var avgTimePerManifest = elapsed.TotalSeconds / ProcessedManifests;
+                var remainingManifests = TotalManifests - ProcessedManifests;
+                
+                return TimeSpan.FromSeconds(remainingManifests * avgTimePerManifest);
+            }
+        }
     }
 }

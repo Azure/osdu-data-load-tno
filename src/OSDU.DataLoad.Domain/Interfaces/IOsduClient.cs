@@ -18,6 +18,16 @@ public interface IOsduClient
     Task<LoadResult> UploadRecordsAsync(IEnumerable<DataRecord> records, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Submits a workflow request to OSDU (matches Python's send_request function)
+    /// </summary>
+    Task<LoadResult> SubmitWorkflowAsync(object workflowRequest, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks the status of a workflow run
+    /// </summary>
+    Task<WorkflowStatus> GetWorkflowStatusAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Checks if a record exists in OSDU
     /// </summary>
     Task<bool> RecordExistsAsync(string recordId, CancellationToken cancellationToken = default);

@@ -260,17 +260,19 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
             "datasets/markers", 
             "datasets/trajectories",
             "datasets/well-logs",
-            "manifests/reference-manifests",
-            "manifests/misc-master-data-manifests",
-            "manifests/master-well-data-manifests", 
-            "manifests/master-wellbore-data-manifests",
+            "output",
             "TNO/provided/TNO/work-products/markers",
             "TNO/provided/TNO/work-products/trajectories",
             "TNO/provided/TNO/work-products/well logs",
             "TNO/provided/TNO/work-products/documents",
-            "TNO/contrib",
+            "TNO/contrib/reference-data",
+            "TNO/contrib/master-data/Misc_master_data",
+            "TNO/contrib/master-data/Well",
+            "TNO/contrib/master-data/Wellbore",
             "schema",
-            "templates"
+            "templates/reference_data",
+            "templates/master_data",
+            "config"
         };
 
         foreach (var dir in datasetDirs)
@@ -292,7 +294,7 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
         
         if (Directory.Exists(rc100Dir))
         {
-            // Map file data
+            // Map file data (actual files that will be uploaded)
             MapDirectoryFiles(Path.Combine(rc100Dir, "USGS_docs"), Path.Combine(destinationDir, "datasets", "documents"), fileMappings);
             MapDirectoryFiles(Path.Combine(rc100Dir, "markers"), Path.Combine(destinationDir, "datasets", "markers"), fileMappings);
             MapDirectoryFiles(Path.Combine(rc100Dir, "trajectories"), Path.Combine(destinationDir, "datasets", "trajectories"), fileMappings);
@@ -301,16 +303,47 @@ public class DownloadTnoDataCommandHandler : IRequestHandler<DownloadTnoDataComm
         
         if (Directory.Exists(rc300Dir))
         {
-            // Map TNO data
+            // Map TNO CSV data (used to generate manifests)
             var tnoProvidedSource = Path.Combine(rc300Dir, "1-data", "3-provided", "TNO");
             var tnoInstancesSource = Path.Combine(rc300Dir, "4-instances", "TNO");
             var schemaSource = Path.Combine(rc300Dir, "3-schema");
             var templatesSource = Path.Combine(rc300Dir, "5-templates");
             
+            // Map CSV data to contrib directory (used for manifest generation)
             MapDirectoryFiles(tnoProvidedSource, Path.Combine(destinationDir, "TNO", "contrib"), fileMappings);
+            
+            // Map work product manifests (JSON files)
             MapDirectoryFiles(tnoInstancesSource, Path.Combine(destinationDir, "TNO", "provided"), fileMappings);
+            
+            // Map schema and templates
             MapDirectoryFiles(schemaSource, Path.Combine(destinationDir, "schema"), fileMappings);
             MapDirectoryFiles(templatesSource, Path.Combine(destinationDir, "templates"), fileMappings);
+        }
+
+        // Copy configuration files if they exist in the Python solution
+        var pyConfigSource = Path.Combine(masterDir, "..", "py-solution", "src", "config");
+        if (Directory.Exists(pyConfigSource))
+        {
+            MapDirectoryFiles(pyConfigSource, Path.Combine(destinationDir, "config"), fileMappings);
+        }
+        
+        // Extract config files from the test data (6-data-load-scripts/scripts/config)
+        var testDataConfigSource = Path.Combine(rc300Dir, "6-data-load-scripts", "scripts", "config");
+        if (Directory.Exists(testDataConfigSource))
+        {
+            _logger.LogInformation("Extracting config files from test data: {ConfigSource}", testDataConfigSource);
+            MapDirectoryFiles(testDataConfigSource, Path.Combine(destinationDir, "config"), fileMappings);
+        }
+        else
+        {
+            _logger.LogWarning("Config files not found in test data at: {ConfigSource}", testDataConfigSource);
+        }
+        
+        // Also look for config files in the extracted data itself (fallback)
+        var extractedConfigSource = Path.Combine(rc300Dir, "config");
+        if (Directory.Exists(extractedConfigSource))
+        {
+            MapDirectoryFiles(extractedConfigSource, Path.Combine(destinationDir, "config"), fileMappings);
         }
         
         // Copy all mapped files
