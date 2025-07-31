@@ -126,7 +126,7 @@ public class Program
                 // Domain services
                 services.AddScoped<IDataTransformer, TnoDataTransformer>();
                 services.AddScoped<IFileProcessor, FileProcessor>();
-                services.AddScoped<IManifestGenerator, ManifestGenerator>();
+                services.AddScoped<IManifestGenerator, ManifestGeneratorV2>();
                 services.AddScoped<IRetryPolicy, ExponentialRetryPolicy>();
                 
                 // Progress reporting services

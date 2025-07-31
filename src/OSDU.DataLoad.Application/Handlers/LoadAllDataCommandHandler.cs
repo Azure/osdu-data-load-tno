@@ -98,7 +98,7 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                 };
             }
 
-            // Step 1: Upload Dataset Files (corresponds to LoadFiles in Python)
+            //Step 1: Upload Dataset Files(corresponds to LoadFiles in Python)
             //Only upload actual files -not reference / master data which are pure records
             //_logger.LogInformation("Step 1: Uploading dataset files (documents, well-logs, markers, trajectories)");
             //var uploadStartTime = DateTime.UtcNow;
@@ -130,7 +130,10 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
             {
                 SourceDataPath = request.SourcePath,
                 OutputPath = request.SourcePath,
-                DataPartition = _configuration.DataPartition
+                DataPartition = _configuration.DataPartition,
+                AclOwner = _configuration.AclOwner,
+                AclViewer = _configuration.AclViewer,
+                LegalTag = _configuration.LegalTag
             }, cancellationToken);
 
             if (!manifestResult.IsSuccess)

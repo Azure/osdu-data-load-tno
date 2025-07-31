@@ -53,9 +53,6 @@ public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifests
         }
 
         var manifestDir = Path.Combine(request.OutputPath, "manifests");
-        var dataPartition = string.IsNullOrWhiteSpace(request.DataPartition) 
-            ? _configuration.DataPartition 
-            : request.DataPartition;
 
         try
         {
@@ -70,15 +67,15 @@ public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifests
 
             var manifestGenerations = new[]
             {
-                new { 
-                    Type = "reference_data", 
+                new {
+                    Type = "reference_data",
                     MappingFile = "tno_ref_data_template_mapping.json",
                     DataDir = "reference-data",
                     OutputDir = "reference-manifests",
                     GroupFile = true
                 },
-                new { 
-                    Type = "master_data", 
+                new {
+                    Type = "master_data",
                     MappingFile = "tno_misc_master_data_template_mapping.json",
                     DataDir = "master-data/Misc_master_data",
                     OutputDir = "misc-master-data-manifests",
@@ -90,9 +87,10 @@ public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifests
                     DataDir = "master-data/Well",
                     OutputDir = "master-well-data-manifests",
                     GroupFile = false
-                },
-                new { 
-                    Type = "master_data", 
+                }
+                ,
+                new {
+                    Type = "master_data",
                     MappingFile = "tno_wellbore_data_template_mapping.json",
                     DataDir = "master-data/Wellbore",
                     OutputDir = "master-wellbore-data-manifests",
@@ -114,7 +112,10 @@ public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifests
                     generation.DataDir, 
                     Path.Combine(manifestDir, generation.OutputDir), 
                     generation.GroupFile, 
-                    dataPartition,
+                    request.DataPartition,
+                    request.AclViewer,
+                    request.AclOwner,
+                    request.LegalTag,
                     cancellationToken);
 
                 if (!success)
@@ -165,6 +166,9 @@ public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifests
         string outputDir, 
         bool groupFile, 
         string dataPartition,
+        string aclViewer,
+        string aclOwner,
+        string legalTag,
         CancellationToken cancellationToken)
     {
         try
@@ -189,6 +193,9 @@ public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifests
                 outputDir,
                 sourceDataPath,
                 dataPartition,
+                aclViewer,
+                aclOwner,
+                legalTag,
                 groupFile,
                 cancellationToken);
 
