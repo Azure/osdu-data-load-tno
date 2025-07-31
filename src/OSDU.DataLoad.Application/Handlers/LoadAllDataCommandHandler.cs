@@ -298,6 +298,8 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                 { TnoDataType.WellboreTrajectories, Path.Combine(outputPath, "loaded-trajectories-datasets.json") }
             };
 
+
+
             foreach (var dataType in workProductTypes)
             {
                 _logger.LogInformation("Loading {DataType} work products", dataType);
@@ -320,66 +322,140 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                     continue;
                 }
 
-                // Load data for this type
-                var phaseStartTime = DateTime.UtcNow;
+                // loop json dir✅
+                // loop through files
+                var manifestFiles = Directory.GetFiles(dataTypePath, "*.json", SearchOption.AllDirectories);
+                foreach (var manifestFile in manifestFiles) {
+                    // get data property
+                    var manifestJson = await File.ReadAllTextAsync(manifestFile, cancellationToken);
+                    var manifestObject = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(manifestJson);
 
-                try
-                {
-                    // For work products, pass file location mappings for manifest processing
-                    var result = await _mediator.Send(new LoadDataCommand
+                    if (manifestObject == null)
                     {
-                        SourcePath = dataTypePath,
-                        DataType = dataType,
-                        FileLocationMappings = fileLocationMappings
-                    }, cancellationToken);
-
-                    phaseResults.Add((dataType, result));
-
-                    // Aggregate results
-                    overallResult = new LoadResult
-                    {
-                        IsSuccess = overallResult.IsSuccess && result.IsSuccess,
-                        ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
-                        SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
-                        FailedRecords = overallResult.FailedRecords + result.FailedRecords,
-                        Duration = DateTime.UtcNow - startTime
-                    };
-
-                    var phaseTime = DateTime.UtcNow - phaseStartTime;
-                    _logger.LogInformation("Completed {DataType} work products in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} records successful",
-                        dataType, phaseTime, result.SuccessfulRecords, result.ProcessedRecords);
-
-                    if (!result.IsSuccess)
-                    {
-                        _logger.LogError("Work product loading failed for {DataType}: {Message}", dataType, result.Message);
-                        return new LoadResult
-                        {
-                            IsSuccess = false,
-                            Message = $"Work product loading failed for {dataType}: {result.Message}",
-                            Duration = DateTime.UtcNow - startTime,
-                            ErrorDetails = result.ErrorDetails,
-                            ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
-                            SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
-                            FailedRecords = overallResult.FailedRecords + result.FailedRecords
-                        };
+                        _logger.LogWarning("Failed to parse manifest file during pre-scan: {ManifestFile}", Path.GetFileName(manifestFile));
+                        continue;
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to load {DataType} work products from {Path}", dataType, dataTypePath);
 
-                    return new LoadResult
+
+
+
+                    var data = manifestObject["Data"];
+
+                    
+
+
+                    var manifest = new Dictionary<string, object>
                     {
-                        IsSuccess = false,
-                        Message = $"Critical error loading {dataType} work products: {ex.Message}",
-                        Duration = DateTime.UtcNow - startTime,
-                        ErrorDetails = ex.Message,
-                        ProcessedRecords = overallResult.ProcessedRecords,
-                        SuccessfulRecords = overallResult.SuccessfulRecords,
-                        FailedRecords = overallResult.FailedRecords + 1
+                        ["Data"] = data
                     };
+                    Console.WriteLine(manifest);
+                    // update data property with values from map file (update_work_products_metadata)
+                    // wrap data property in { "kind": "osdu:wks:Manifest:1.0.0",  "data": <object>}
+                    // wrap in execution context
+
+
+                    var ingestRequest = new
+                    {
+                        executionContext = new
+                        {
+                            Payload = new Dictionary<string, object>
+                            {
+                                ["AppKey"] = "test-app",
+                                ["data-partition-id"] = _configuration.DataPartition
+                            },
+                            manifest = manifest
+                        }
+                    };
+
+                    Console.WriteLine(ingestRequest);
                 }
             }
+
+
+
+
+            //foreach (var dataType in workProductTypes)
+            //{
+            //    _logger.LogInformation("Loading {DataType} work products", dataType);
+
+            //    // Check if the subdirectory exists for this data type
+            //    var subdirectory = DataLoadingOrder.DirectoryMapping[dataType];
+            //    var dataTypePath = Path.Combine(request.SourcePath, subdirectory);
+
+            //    if (!Directory.Exists(dataTypePath))
+            //    {
+            //        _logger.LogWarning("Skipping {DataType} - directory not found: {Path}", dataType, dataTypePath);
+            //        continue;
+            //    }
+
+            //    // Check if file location mapping exists
+            //    var fileLocationMap = fileLocationMappings.GetValueOrDefault(dataType);
+            //    if (string.IsNullOrEmpty(fileLocationMap) || !File.Exists(fileLocationMap))
+            //    {
+            //        _logger.LogWarning("Skipping {DataType} - file location mapping not found: {Map}", dataType, fileLocationMap);
+            //        continue;
+            //    }
+
+            //    // Load data for this type
+            //    var phaseStartTime = DateTime.UtcNow;
+
+            //    try
+            //    {
+            //        // For work products, pass file location mappings for manifest processing
+            //        var result = await _mediator.Send(new LoadDataCommand
+            //        {
+            //            SourcePath = dataTypePath,
+            //            DataType = dataType,
+            //            FileLocationMappings = fileLocationMappings
+            //        }, cancellationToken);
+
+            //        phaseResults.Add((dataType, result));
+
+            //        // Aggregate results
+            //        overallResult = new LoadResult
+            //        {
+            //            IsSuccess = overallResult.IsSuccess && result.IsSuccess,
+            //            ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
+            //            SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
+            //            FailedRecords = overallResult.FailedRecords + result.FailedRecords,
+            //            Duration = DateTime.UtcNow - startTime
+            //        };
+
+            //        var phaseTime = DateTime.UtcNow - phaseStartTime;
+            //        _logger.LogInformation("Completed {DataType} work products in {Duration:mm\\:ss} - {SuccessfulRecords}/{ProcessedRecords} records successful",
+            //            dataType, phaseTime, result.SuccessfulRecords, result.ProcessedRecords);
+
+            //        if (!result.IsSuccess)
+            //        {
+            //            _logger.LogError("Work product loading failed for {DataType}: {Message}", dataType, result.Message);
+            //            return new LoadResult
+            //            {
+            //                IsSuccess = false,
+            //                Message = $"Work product loading failed for {dataType}: {result.Message}",
+            //                Duration = DateTime.UtcNow - startTime,
+            //                ErrorDetails = result.ErrorDetails,
+            //                ProcessedRecords = overallResult.ProcessedRecords + result.ProcessedRecords,
+            //                SuccessfulRecords = overallResult.SuccessfulRecords + result.SuccessfulRecords,
+            //                FailedRecords = overallResult.FailedRecords + result.FailedRecords
+            //            };
+            //        }
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        _logger.LogError(ex, "Failed to load {DataType} work products from {Path}", dataType, dataTypePath);
+
+            //        return new LoadResult
+            //        {
+            //            IsSuccess = false,
+            //            Message = $"Critical error loading {dataType} work products: {ex.Message}",
+            //            Duration = DateTime.UtcNow - startTime,
+            //            ErrorDetails = ex.Message,
+            //            ProcessedRecords = overallResult.ProcessedRecords,
+            //            SuccessfulRecords = overallResult.SuccessfulRecords,
+            //            FailedRecords = overallResult.FailedRecords + 1
+            //        };
+            //    }
+            //}
 
             _logger.LogInformation("Step 4 completed in {Duration:mm\\:ss}", DateTime.UtcNow - workProductStartTime);
 

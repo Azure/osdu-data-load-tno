@@ -501,27 +501,27 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
             _ => dataType.ToString()
         };
 
-        // For work products, use the work-products approach (similar to Python's --work-products flag)
-        bool isWorkProduct = dataType == TnoDataType.Documents || dataType == TnoDataType.WellLogs || 
-                           dataType == TnoDataType.WellMarkers || dataType == TnoDataType.WellboreTrajectories ||
-                           dataType == TnoDataType.WorkProducts;
+        //// For work products, use the work-products approach (similar to Python's --work-products flag)
+        //bool isWorkProduct = dataType == TnoDataType.Documents || dataType == TnoDataType.WellLogs || 
+        //                   dataType == TnoDataType.WellMarkers || dataType == TnoDataType.WellboreTrajectories ||
+        //                   dataType == TnoDataType.WorkProducts;
 
-        if (isWorkProduct && manifestObject.ContainsKey("Data"))
-        {
-            // For work products, send the Data directly (matching Python's --work-products behavior)
-            return new
-            {
-                executionContext = new
-                {
-                    Payload = new Dictionary<string, object>
-                    {
-                        ["AppKey"] = "test-app",
-                        ["data-partition-id"] = _configuration.DataPartition
-                    },
-                    manifest = manifestObject  // Send the original manifest directly
-                }
-            };
-        }
+        //if (isWorkProduct && manifestObject.ContainsKey("Data"))
+        //{
+        //    // For work products, send the Data directly (matching Python's --work-products behavior)
+        //    return new
+        //    {
+        //        executionContext = new
+        //        {
+        //            Payload = new Dictionary<string, object>
+        //            {
+        //                ["AppKey"] = "test-app",
+        //                ["data-partition-id"] = _configuration.DataPartition
+        //            },
+        //            manifest = manifestObject  // Send the original manifest directly
+        //        }
+        //    };
+        //}
 
         // For non-work products, wrap in manifest structure
         var manifest = new Dictionary<string, object>
