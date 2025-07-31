@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
+using System.Text.Json;
 
 namespace OSDU.DataLoad.Application.Handlers;
 
@@ -298,8 +299,6 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                 { TnoDataType.WellboreTrajectories, Path.Combine(outputPath, "loaded-trajectories-datasets.json") }
             };
 
-
-
             foreach (var dataType in workProductTypes)
             {
                 _logger.LogInformation("Loading {DataType} work products", dataType);
@@ -336,22 +335,20 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                         continue;
                     }
 
-
-
-
                     var data = manifestObject["Data"];
+                    var jsonBefore = JsonSerializer.Serialize(data);
+                    Console.WriteLine(jsonBefore);
+                    // Update work product data (equivalent to Python's update_work_products_metadata)
+                    var updatedData = await UpdateWorkProductsMetadata(data, fileLocationMap, request.SourcePath);
 
-                    
-
+                    var jsonAfter = JsonSerializer.Serialize(updatedData);
+                    Console.WriteLine(jsonAfter);
 
                     var manifest = new Dictionary<string, object>
                     {
-                        ["Data"] = data
+                        ["Data"] = updatedData
                     };
                     Console.WriteLine(manifest);
-                    // update data property with values from map file (update_work_products_metadata)
-                    // wrap data property in { "kind": "osdu:wks:Manifest:1.0.0",  "data": <object>}
-                    // wrap in execution context
 
 
                     var ingestRequest = new
@@ -367,7 +364,20 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
                         }
                     };
 
-                    Console.WriteLine(ingestRequest);
+                    var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+                    var ingestJson = JsonSerializer.Serialize(ingestRequest, jsonOptions);
+                    Console.WriteLine(ingestJson);
+                    
+                    // Write ingestRequest to manifests/work-products directory
+                    var workProductsDir = Path.Combine(request.SourcePath, "manifests", "work-products");
+                    Directory.CreateDirectory(workProductsDir);
+                    
+                    var manifestFileName = Path.GetFileNameWithoutExtension(manifestFile);
+                    var outputFileName = $"{manifestFileName}_ingest.json";
+                    var outputFilePath = Path.Combine(workProductsDir, outputFileName);
+                    
+                    await File.WriteAllTextAsync(outputFilePath, ingestJson, cancellationToken);
+                    _logger.LogInformation("Wrote work product manifest to: {OutputPath}", outputFilePath);
                 }
             }
 
@@ -660,45 +670,446 @@ public class LoadAllDataCommandHandler : IRequestHandler<LoadAllDataCommand, Loa
         return counts;
     }
 
-    /// <summary>
-    /// Enhanced helper class to track overall progress across all data types
-    /// </summary>
-    private class OverallProgress
-    {
-        public int TotalManifests { get; set; }
-        public int ProcessedManifests { get; set; }
-        public int SuccessfulManifests { get; set; }
-        public int FailedManifests { get; set; }
-        public Dictionary<TnoDataType, int> TypeCounts { get; set; } = new();
-        
-        // Additional metrics for enhanced tracking
-        public DateTime StartTime { get; set; } = DateTime.UtcNow;
-        public Dictionary<TnoDataType, DateTime> TypeStartTimes { get; set; } = new();
-        public Dictionary<TnoDataType, TimeSpan> TypeDurations { get; set; } = new();
-        
         /// <summary>
-        /// Calculate overall completion percentage
+        /// Enhanced helper class to track overall progress across all data types
         /// </summary>
-        public double CompletionPercentage => TotalManifests > 0 
-            ? (double)ProcessedManifests / TotalManifests * 100 
-            : 0;
-        
-        /// <summary>
-        /// Calculate estimated time remaining based on current processing rate
-        /// </summary>
-        public TimeSpan? EstimatedTimeRemaining
+        private class OverallProgress
         {
-            get
+            public int TotalManifests { get; set; }
+            public int ProcessedManifests { get; set; }
+            public int SuccessfulManifests { get; set; }
+            public int FailedManifests { get; set; }
+            public Dictionary<TnoDataType, int> TypeCounts { get; set; } = new();
+            
+            // Additional metrics for enhanced tracking
+            public DateTime StartTime { get; set; } = DateTime.UtcNow;
+            public Dictionary<TnoDataType, DateTime> TypeStartTimes { get; set; } = new();
+            public Dictionary<TnoDataType, TimeSpan> TypeDurations { get; set; } = new();
+            
+            /// <summary>
+            /// Calculate overall completion percentage
+            /// </summary>
+            public double CompletionPercentage => TotalManifests > 0 
+                ? (double)ProcessedManifests / TotalManifests * 100 
+                : 0;
+            
+            /// <summary>
+            /// Calculate estimated time remaining based on current processing rate
+            /// </summary>
+            public TimeSpan? EstimatedTimeRemaining
             {
-                if (ProcessedManifests == 0 || TotalManifests == 0 || ProcessedManifests >= TotalManifests)
-                    return null;
-                
-                var elapsed = DateTime.UtcNow - StartTime;
-                var avgTimePerManifest = elapsed.TotalSeconds / ProcessedManifests;
-                var remainingManifests = TotalManifests - ProcessedManifests;
-                
-                return TimeSpan.FromSeconds(remainingManifests * avgTimePerManifest);
+                get
+                {
+                    if (ProcessedManifests == 0 || TotalManifests == 0 || ProcessedManifests >= TotalManifests)
+                        return null;
+                    
+                    var elapsed = DateTime.UtcNow - StartTime;
+                    var avgTimePerManifest = elapsed.TotalSeconds / ProcessedManifests;
+                    var remainingManifests = TotalManifests - ProcessedManifests;
+                    
+                    return TimeSpan.FromSeconds(remainingManifests * avgTimePerManifest);
+                }
             }
         }
+
+        /// <summary>
+        /// C# implementation of Python's update_work_products_metadata function
+        /// </summary>
+        private async Task<object> UpdateWorkProductsMetadata(object data, string fileLocationMapPath, string baseDir)
+        {
+            try
+            {
+                // Create namespace patterns (equivalent to Python's reference_pattern and master_pattern)
+                var referencePattern = $"{_configuration.DataPartition}:reference-data";
+                var masterPattern = $"{_configuration.DataPartition}:master-data";
+
+                // Convert data to JSON string for pattern replacements (equivalent to Python's json.dumps + replace)
+                var dataJson = System.Text.Json.JsonSerializer.Serialize(data);
+                
+                var updatedManifest = dataJson
+                    .Replace("osdu:reference-data", referencePattern)
+                    .Replace("osdu:master-data", masterPattern)
+                    .Replace("surrogate-key:file-1", "surrogate-key:dataset--1:0:0")
+                    .Replace("surrogate-key:wpc-1", "surrogate-key:wpc--1:0:0");
+
+                // Parse back to object (equivalent to Python's json.loads)
+                var updatedData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(updatedManifest);
+                
+                if (updatedData == null)
+                {
+                    _logger.LogWarning("Failed to deserialize updated manifest data");
+                    return data;
+                }
+
+                _logger.LogDebug("Base directory is {BaseDir}", baseDir);
+
+                // Update legal and ACL tags (equivalent to Python's update_legal_and_acl_tags and add_metadata calls)
+                UpdateLegalAndAclTags(updatedData, "WorkProduct");
+                AddMetadata(updatedData, "WorkProductComponents");
+                AddMetadata(updatedData, "Datasets");
+
+                // Load file location map (equivalent to Python's "with open(file_location_map) as file")
+                if (!File.Exists(fileLocationMapPath))
+                {
+                    _logger.LogWarning("File location map not found: {Path}", fileLocationMapPath);
+                    return updatedData;
+                }
+
+                var locationMapJson = await File.ReadAllTextAsync(fileLocationMapPath);
+                var locationMap = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, object>>>(locationMapJson);
+
+                if (locationMap == null)
+                {
+                    _logger.LogWarning("Failed to parse file location map");
+                    return updatedData;
+                }
+
+                // Get file name from WorkProduct data (equivalent to Python's file_name = data["WorkProduct"]["data"]["Name"])
+                if (updatedData.TryGetValue("WorkProduct", out var workProductObj))
+                {
+                    string? fileName = null;
+                    
+                    // Handle both JsonElement and already deserialized object cases
+                    if (workProductObj is JsonElement workProductElement)
+                    {
+                        if (workProductElement.TryGetProperty("data", out var workProductData) &&
+                            workProductData.TryGetProperty("Name", out var nameElement))
+                        {
+                            fileName = nameElement.GetString();
+                        }
+                    }
+                    else if (workProductObj is Dictionary<string, object> workProductDict)
+                    {
+                        if (workProductDict.TryGetValue("data", out var dataObj))
+                        {
+                            if (dataObj is JsonElement dataElement && dataElement.TryGetProperty("Name", out var nameEl))
+                            {
+                                fileName = nameEl.GetString();
+                            }
+                            else if (dataObj is Dictionary<string, object> dataDict && dataDict.TryGetValue("Name", out var nameObj))
+                            {
+                                fileName = nameObj?.ToString();
+                            }
+                            else if (dataObj is string dataString)
+                            {
+                                // Handle case where data is a JSON string
+                                try
+                                {
+                                    var parsedData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(dataString);
+                                    if (parsedData?.TryGetValue("Name", out var nameValue) == true)
+                                    {
+                                        fileName = nameValue?.ToString();
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Failed to parse WorkProduct data JSON string");
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!string.IsNullOrEmpty(fileName) && locationMap.ContainsKey(fileName))
+                    {
+                        var fileInfo = locationMap[fileName];
+                        
+                        // Extract file information
+                        var fileSource = fileInfo.TryGetValue("file_source", out var fs) ? fs.ToString() : "";
+                        var fileId = fileInfo.TryGetValue("file_id", out var fi) ? fi.ToString() : "";
+                        var fileVersion = fileInfo.TryGetValue("file_record_version", out var fv) ? fv.ToString() : "";
+
+                        // Update Dataset with Generated File Id and File Source
+                        if (updatedData.TryGetValue("Datasets", out var datasetsObj))
+                        {
+                            List<Dictionary<string, object>>? datasetsDict = null;
+                            
+                            // Handle both JsonElement and already deserialized List cases
+                            if (datasetsObj is JsonElement datasets && 
+                                datasets.ValueKind == JsonValueKind.Array && 
+                                datasets.GetArrayLength() > 0)
+                            {
+                                datasetsDict = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object>>>(datasets.GetRawText());
+                            }
+                            else if (datasetsObj is List<Dictionary<string, object>> existingList && existingList.Count > 0)
+                            {
+                                datasetsDict = existingList;
+                            }
+                            
+                            if (datasetsDict != null && datasetsDict.Count > 0)
+                            {
+                                datasetsDict[0]["id"] = fileId;
+                                
+                                // Update FileSource and remove PreloadFilePath
+                                if (datasetsDict[0].TryGetValue("data", out var dataObj))
+                                {
+                                    Dictionary<string, object>? dataDict = null;
+                                    
+                                    if (dataObj is JsonElement dataElement)
+                                    {
+                                        dataDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(dataElement.GetRawText());
+                                    }
+                                    else if (dataObj is Dictionary<string, object> existingDataDict)
+                                    {
+                                        dataDict = existingDataDict;
+                                    }
+                                    
+                                    if (dataDict?.TryGetValue("DatasetProperties", out var datasetPropsObj) == true)
+                                    {
+                                        Dictionary<string, object>? propsDict = null;
+                                        
+                                        if (datasetPropsObj is JsonElement datasetProps)
+                                        {
+                                            propsDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(datasetProps.GetRawText());
+                                        }
+                                        else if (datasetPropsObj is Dictionary<string, object> existingPropsDict)
+                                        {
+                                            propsDict = existingPropsDict;
+                                        }
+                                        
+                                        if (propsDict?.TryGetValue("FileSourceInfo", out var fileSourceInfoObj) == true)
+                                        {
+                                            Dictionary<string, object>? fileSourceDict = null;
+                                            
+                                            if (fileSourceInfoObj is JsonElement fileSourceInfo)
+                                            {
+                                                fileSourceDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(fileSourceInfo.GetRawText());
+                                            }
+                                            else if (fileSourceInfoObj is Dictionary<string, object> existingFileSourceDict)
+                                            {
+                                                fileSourceDict = existingFileSourceDict;
+                                            }
+                                            
+                                            if (fileSourceDict != null)
+                                            {
+                                                fileSourceDict["FileSource"] = fileSource;
+                                                fileSourceDict.Remove("PreloadFilePath");
+                                                propsDict["FileSourceInfo"] = fileSourceDict;
+                                                dataDict["DatasetProperties"] = propsDict;
+                                                datasetsDict[0]["data"] = dataDict;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                updatedData["Datasets"] = datasetsDict;
+                            }
+                        }
+
+                        // Update FileId in WorkProductComponent
+                        if (updatedData.TryGetValue("WorkProductComponents", out var wpcObj))
+                        {
+                            List<Dictionary<string, object>>? wpcList = null;
+                            
+                            // Handle both JsonElement and already deserialized List cases
+                            if (wpcObj is JsonElement wpc && 
+                                wpc.ValueKind == JsonValueKind.Array && 
+                                wpc.GetArrayLength() > 0)
+                            {
+                                wpcList = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object>>>(wpc.GetRawText());
+                            }
+                            else if (wpcObj is List<Dictionary<string, object>> existingWpcList && existingWpcList.Count > 0)
+                            {
+                                wpcList = existingWpcList;
+                            }
+                            
+                            if (wpcList != null && wpcList.Count > 0)
+                            {
+                                if (wpcList[0].TryGetValue("data", out var wpcDataObj))
+                                {
+                                    Dictionary<string, object>? wpcDataDict = null;
+                                    
+                                    if (wpcDataObj is JsonElement wpcDataElement)
+                                    {
+                                        wpcDataDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(wpcDataElement.GetRawText());
+                                    }
+                                    else if (wpcDataObj is Dictionary<string, object> existingWpcDataDict)
+                                    {
+                                        wpcDataDict = existingWpcDataDict;
+                                    }
+                                    
+                                    if (wpcDataDict?.TryGetValue("Datasets", out var wpcDatasetsObj) == true)
+                                    {
+                                        List<string>? wpcDatasetsList = null;
+                                        
+                                        if (wpcDatasetsObj is JsonElement wpcDatasets && wpcDatasets.ValueKind == JsonValueKind.Array)
+                                        {
+                                            wpcDatasetsList = System.Text.Json.JsonSerializer.Deserialize<List<string>>(wpcDatasets.GetRawText());
+                                        }
+                                        else if (wpcDatasetsObj is List<string> existingWpcDatasetsList)
+                                        {
+                                            wpcDatasetsList = existingWpcDatasetsList;
+                                        }
+                                        
+                                        if (wpcDatasetsList != null && wpcDatasetsList.Count > 0)
+                                        {
+                                            wpcDatasetsList[0] = $"{fileId}:{fileVersion}";
+                                            wpcDataDict["Datasets"] = wpcDatasetsList;
+                                            wpcList[0]["data"] = wpcDataDict;
+                                        }
+                                    }
+                                }
+                                
+                                updatedData["WorkProductComponents"] = wpcList;
+                            }
+                        }
+
+                        // Generate WorkProduct ID if not present (equivalent to Python's "if id not in data["WorkProduct"]")
+                        Dictionary<string, object>? workProductDict = null;
+                        
+                        if (workProductObj is JsonElement wpElement)
+                        {
+                            workProductDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(wpElement.GetRawText());
+                        }
+                        else if (workProductObj is Dictionary<string, object> existingDict)
+                        {
+                            workProductDict = existingDict;
+                        }
+                        
+                        if (workProductDict != null && !workProductDict.ContainsKey("id"))
+                        {
+                            var workProductId = GenerateWorkProductId(fileName, baseDir);
+                            workProductDict["id"] = workProductId;
+                            updatedData["WorkProduct"] = workProductDict;
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("File {FileName} does not exist in location map", fileName);
+                    }
+                }
+
+                _logger.LogDebug("Data to upload workproduct: {Data}", System.Text.Json.JsonSerializer.Serialize(updatedData));
+                return updatedData;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating work products metadata");
+                return data;
+            }
+        }
+
+        /// <summary>
+        /// Updates legal and ACL tags for the specified section
+        /// </summary>
+        private void UpdateLegalAndAclTags(Dictionary<string, object> data, string sectionName)
+        {
+            if (data.TryGetValue(sectionName, out var sectionObj))
+            {
+                Dictionary<string, object>? sectionDict = null;
+                
+                // Handle both JsonElement and already deserialized object cases
+                if (sectionObj is JsonElement section)
+                {
+                    sectionDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(section.GetRawText());
+                }
+                else if (sectionObj is Dictionary<string, object> existingSectionDict)
+                {
+                    sectionDict = existingSectionDict;
+                }
+                
+                if (sectionDict != null)
+                {
+                    // Update legal tags
+                    if (sectionDict.TryGetValue("legal", out var legalObj))
+                    {
+                        Dictionary<string, object>? legalDict = null;
+                        
+                        if (legalObj is JsonElement legal)
+                        {
+                            legalDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(legal.GetRawText());
+                        }
+                        else if (legalObj is Dictionary<string, object> existingLegalDict)
+                        {
+                            legalDict = existingLegalDict;
+                        }
+                        
+                        if (legalDict != null)
+                        {
+                            legalDict["legaltags"] = new[] { _configuration.LegalTag };
+                            legalDict["otherRelevantDataCountries"] = new[] { "US" };
+                            legalDict["status"] = "compliant";
+                            sectionDict["legal"] = legalDict;
+                        }
+                    }
+
+                    // Update ACL tags
+                    if (sectionDict.TryGetValue("acl", out var aclObj))
+                    {
+                        Dictionary<string, object>? aclDict = null;
+                        
+                        if (aclObj is JsonElement acl)
+                        {
+                            aclDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(acl.GetRawText());
+                        }
+                        else if (aclObj is Dictionary<string, object> existingAclDict)
+                        {
+                            aclDict = existingAclDict;
+                        }
+                        
+                        if (aclDict != null)
+                        {
+                            aclDict["viewers"] = new[] { _configuration.AclViewer };
+                            aclDict["owners"] = new[] { _configuration.AclOwner };
+                            sectionDict["acl"] = aclDict;
+                        }
+                    }
+
+                    data[sectionName] = sectionDict;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds metadata to the specified section array
+        /// </summary>
+        private void AddMetadata(Dictionary<string, object> data, string sectionName)
+        {
+            if (data.TryGetValue(sectionName, out var sectionObj))
+            {
+                List<Dictionary<string, object>>? sectionList = null;
+                
+                // Handle both JsonElement and already deserialized List cases
+                if (sectionObj is JsonElement section && section.ValueKind == JsonValueKind.Array)
+                {
+                    sectionList = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object>>>(section.GetRawText());
+                }
+                else if (sectionObj is List<Dictionary<string, object>> existingList)
+                {
+                    sectionList = existingList;
+                }
+                
+                if (sectionList != null)
+                {
+                    foreach (var item in sectionList)
+                    {
+                        // Create a temporary dictionary to pass to UpdateLegalAndAclTags
+                        var itemWrapper = new Dictionary<string, object> { [sectionName.TrimEnd('s')] = item };
+                        UpdateLegalAndAclTags(itemWrapper, sectionName.TrimEnd('s'));
+                        
+                        // Get the updated item back from the wrapper
+                        if (itemWrapper.TryGetValue(sectionName.TrimEnd('s'), out var updatedItem) && 
+                            updatedItem is Dictionary<string, object> updatedItemDict)
+                        {
+                            // Copy the updated properties back to the original item
+                            foreach (var kvp in updatedItemDict)
+                            {
+                                item[kvp.Key] = kvp.Value;
+                            }
+                        }
+                    }
+                    data[sectionName] = sectionList;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Generates a work product ID based on filename and base directory
+        /// </summary>
+        private string GenerateWorkProductId(string fileName, string baseDir)
+        {
+            // Equivalent to Python's generate_workproduct_id function
+            // Should generate format like: "opendes:work-product--WorkProduct:documents-{fileName}"
+            var cleanFileName = fileName.Replace(" ", "_").Replace("-", "_");
+            return $"opendes:work-product--WorkProduct:documents-{cleanFileName}";
+        }
     }
-}
