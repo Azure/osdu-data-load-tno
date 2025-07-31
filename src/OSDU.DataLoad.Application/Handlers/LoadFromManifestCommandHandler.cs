@@ -36,7 +36,7 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
             if (request.Manifest == null && !string.IsNullOrEmpty(request.SourcePath))
             {
                 _logger.LogInformation("Loading data from pre-generated manifest directory: {SourcePath}", request.SourcePath);
-                return await LoadFromManifestDirectory(request.SourcePath, request.DataType, request.FileLocationMapPath, request.IsWorkProduct, cancellationToken);
+                return await LoadFromManifestDirectory(request.SourcePath, request.DataType, request.FileLocationMapPath, request.IsWorkProduct, request.FileLocationMappings, cancellationToken);
             }
             
             // Handle loading from explicit manifest object (legacy approach)
@@ -75,7 +75,7 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
     /// Load data from a pre-generated manifest directory (created by GenerateManifestsCommand)
     /// This matches the Python workflow where manifests are generated once, then loaded
     /// </summary>
-    private async Task<LoadResult> LoadFromManifestDirectory(string manifestDirectory, TnoDataType dataType, string? fileLocationMapPath, bool isWorkProduct, CancellationToken cancellationToken)
+    private async Task<LoadResult> LoadFromManifestDirectory(string manifestDirectory, TnoDataType dataType, string? fileLocationMapPath, bool isWorkProduct, Dictionary<TnoDataType, string>? fileLocationMappings, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(manifestDirectory))
         {
@@ -190,7 +190,7 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
                     }
 
                     // Load this individual manifest
-                    var manifestResult = await LoadFromGeneratedManifest(manifestObject, Path.GetFileName(manifestFile), DateTime.UtcNow, cancellationToken);
+                    var manifestResult = await LoadFromGeneratedManifest(manifestObject, Path.GetFileName(manifestFile), DateTime.UtcNow, currentType, fileLocationMappings, cancellationToken);
 
                     // Update type-specific progress
                     if (manifestResult.IsSuccess)
@@ -315,69 +315,14 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
     /// Detects data type by checking for ReferenceData, MasterData, or Data properties,
     /// or by examining the 'kind' field for individual records
     /// </summary>
-    private async Task<LoadResult> LoadFromGeneratedManifest(Dictionary<string, object> manifestObject, string fileName, DateTime startTime, CancellationToken cancellationToken)
+    private async Task<LoadResult> LoadFromGeneratedManifest(Dictionary<string, object> manifestObject, string fileName, DateTime startTime, TnoDataType dataType, Dictionary<TnoDataType, string>? fileLocationMappings, CancellationToken cancellationToken)
     {
-        // Detect data type from manifest structure
-        TnoDataType dataType;
-
-        if (manifestObject.ContainsKey("ReferenceData"))
+        // For work products, process the manifest with file location mappings (equivalent to Python's update_work_products_metadata)
+        if (IsWorkProductType(dataType) && fileLocationMappings != null)
         {
-            dataType = TnoDataType.ReferenceData;
-        }
-        else if (manifestObject.ContainsKey("MasterData"))
-        {
-            dataType = TnoDataType.MiscMasterData;
-        }
-        else if (manifestObject.ContainsKey("Data"))
-        {
-            dataType = TnoDataType.WorkProducts;
-        }
-        else if (manifestObject.ContainsKey("kind"))
-        {
-            // This is a single record - detect type from the 'kind' field
-            var kindValue = manifestObject["kind"].ToString();
-            
-            if (kindValue?.Contains("reference-data") == true)
-            {
-                dataType = TnoDataType.ReferenceData;
-            }
-            else if (kindValue?.Contains("master-data") == true)
-            {
-                dataType = TnoDataType.MiscMasterData;
-            }
-            else if (kindValue?.Contains("work-product") == true || kindValue?.Contains("dataset") == true)
-            {
-                dataType = TnoDataType.WorkProducts;
-            }
-            else
-            {
-                return new LoadResult
-                {
-                    IsSuccess = false,
-                    Message = $"Unknown kind in manifest: {kindValue}",
-                    ProcessedRecords = 0,
-                    SuccessfulRecords = 0,
-                    FailedRecords = 0,
-                    Duration = DateTime.UtcNow - startTime,
-                    ErrorDetails = $"Unable to determine data type from kind: {kindValue}"
-                };
-            }
-        }
-        else
-        {
-            return new LoadResult
-            {
-                IsSuccess = false,
-                Message = $"Invalid data type in manifest: ",
-                ProcessedRecords = 0,
-                SuccessfulRecords = 0,
-                FailedRecords = 0,
-                Duration = DateTime.UtcNow - startTime,
-                ErrorDetails = $"Manifest does not contain ReferenceData, MasterData, Data property, or 'kind' field"
-            };
+            manifestObject = await ProcessWorkProductManifest(manifestObject, dataType, fileLocationMappings);
         }
 
-        _logger.LogInformation("Detected data type {DataType} from manifest structure", dataType);
         _logger.LogInformation("Processing manifest {FileName} for {DataType}", fileName, dataType);
 
         // Upload the manifest to OSDU and let the workflow service handle the actual record processing
@@ -548,11 +493,37 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
         {
             TnoDataType.ReferenceData => "ReferenceData",
             TnoDataType.MiscMasterData => "MasterData", 
+            TnoDataType.Documents => "Data",
+            TnoDataType.WellLogs => "Data",
+            TnoDataType.WellMarkers => "Data", 
+            TnoDataType.WellboreTrajectories => "Data",
             TnoDataType.WorkProducts => "Data",
             _ => dataType.ToString()
         };
 
-        // Create manifest in OSDU format
+        // For work products, use the work-products approach (similar to Python's --work-products flag)
+        bool isWorkProduct = dataType == TnoDataType.Documents || dataType == TnoDataType.WellLogs || 
+                           dataType == TnoDataType.WellMarkers || dataType == TnoDataType.WellboreTrajectories ||
+                           dataType == TnoDataType.WorkProducts;
+
+        if (isWorkProduct && manifestObject.ContainsKey("Data"))
+        {
+            // For work products, send the Data directly (matching Python's --work-products behavior)
+            return new
+            {
+                executionContext = new
+                {
+                    Payload = new Dictionary<string, object>
+                    {
+                        ["AppKey"] = "test-app",
+                        ["data-partition-id"] = _configuration.DataPartition
+                    },
+                    manifest = manifestObject  // Send the original manifest directly
+                }
+            };
+        }
+
+        // For non-work products, wrap in manifest structure
         var manifest = new Dictionary<string, object>
         {
             ["kind"] = "osdu:wks:Manifest:1.0.0"
@@ -651,5 +622,122 @@ public class LoadFromManifestCommandHandler : IRequestHandler<LoadFromManifestCo
         public int ProcessedCount { get; set; }
         public int SuccessCount { get; set; }
         public int FailedCount { get; set; }
+    }
+
+    /// <summary>
+    /// Determines if a data type is a work product that requires file location mappings
+    /// </summary>
+    private static bool IsWorkProductType(TnoDataType dataType)
+    {
+        return dataType == TnoDataType.Documents || 
+               dataType == TnoDataType.WellLogs || 
+               dataType == TnoDataType.WellMarkers || 
+               dataType == TnoDataType.WellboreTrajectories;
+    }
+
+    /// <summary>
+    /// Processes work product manifests with file location mappings (equivalent to Python's update_work_products_metadata)
+    /// </summary>
+    private async Task<Dictionary<string, object>> ProcessWorkProductManifest(Dictionary<string, object> manifestObject, TnoDataType dataType, Dictionary<TnoDataType, string> fileLocationMappings)
+    {
+        try
+        {
+            // Get the file location mapping for this data type
+            if (!fileLocationMappings.TryGetValue(dataType, out var mappingPath) || !File.Exists(mappingPath))
+            {
+                _logger.LogWarning("No file location mapping found for {DataType} at {Path}", dataType, mappingPath);
+                return manifestObject;
+            }
+
+            // Load the file location mappings
+            var mappingJson = await File.ReadAllTextAsync(mappingPath);
+            var fileMappings = JsonSerializer.Deserialize<Dictionary<string, object>>(mappingJson);
+
+            if (fileMappings == null)
+            {
+                _logger.LogWarning("Failed to parse file location mappings from {Path}", mappingPath);
+                return manifestObject;
+            }
+
+            // Clone the manifest to avoid modifying the original
+            var manifestJson = JsonSerializer.Serialize(manifestObject);
+            var processedManifest = JsonSerializer.Deserialize<Dictionary<string, object>>(manifestJson);
+
+            if (processedManifest == null)
+            {
+                return manifestObject;
+            }
+
+            // Replace namespace placeholders (Python does: replace("$NAMESPACE", namespace))
+            var namespacedJson = JsonSerializer.Serialize(processedManifest);
+            namespacedJson = namespacedJson.Replace("$NAMESPACE", _configuration.DataPartition);
+            processedManifest = JsonSerializer.Deserialize<Dictionary<string, object>>(namespacedJson);
+
+            if (processedManifest == null)
+            {
+                return manifestObject;
+            }
+
+            // Inject file references from location mappings
+            InjectFileReferences(processedManifest, fileMappings);
+
+            _logger.LogDebug("Processed work product manifest with file location mappings for {DataType}", dataType);
+            return processedManifest;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process work product manifest for {DataType}", dataType);
+            return manifestObject;
+        }
+    }
+
+    /// <summary>
+    /// Recursively injects file references from location mappings into the manifest
+    /// </summary>
+    private void InjectFileReferences(object obj, Dictionary<string, object> fileMappings)
+    {
+        if (obj is Dictionary<string, object> dict)
+        {
+            // Look for file reference patterns and replace with actual file IDs
+            foreach (var key in dict.Keys.ToList())
+            {
+                var value = dict[key];
+                
+                if (value is string stringValue)
+                {
+                    // Check if this looks like a file reference that needs mapping
+                    if (stringValue.Contains("FILE_") || stringValue.Contains("dataset"))
+                    {
+                        // Look for matching file ID in mappings
+                        foreach (var mapping in fileMappings)
+                        {
+                            if (mapping.Value is JsonElement element && element.ValueKind == JsonValueKind.String)
+                            {
+                                var fileId = element.GetString();
+                                // Replace file reference with actual file ID
+                                if (stringValue.Contains(mapping.Key) && !string.IsNullOrEmpty(fileId))
+                                {
+                                    dict[key] = fileId;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Recursively process nested objects
+                    InjectFileReferences(value, fileMappings);
+                }
+            }
+        }
+        else if (obj is System.Text.Json.JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Array)
+        {
+            // Process array elements
+            foreach (var item in jsonElement.EnumerateArray())
+            {
+                InjectFileReferences(item, fileMappings);
+            }
+        }
     }
 }

@@ -13,4 +13,5 @@ public record LoadFromManifestCommand : IRequest<LoadResult>
     public TnoDataType DataType { get; init; }
     public string? FileLocationMapPath { get; init; }
     public bool IsWorkProduct { get; init; } = false;
+    public Dictionary<TnoDataType, string>? FileLocationMappings { get; init; }
 }

@@ -96,14 +96,14 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
         {
             try
             {
-                var outputFile = Path.Combine(request.OutputPath, "datasets-location.json");
-                Directory.CreateDirectory(Path.GetDirectoryName(outputFile)!);
+                
+                Directory.CreateDirectory(Path.GetDirectoryName(request.OutputPath)!);
                 
                 var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
                 var jsonContent = JsonSerializer.Serialize(successfulUploads, jsonOptions);
-                await File.WriteAllTextAsync(outputFile, jsonContent, cancellationToken);
+                await File.WriteAllTextAsync(request.OutputPath, jsonContent, cancellationToken);
                 
-                _logger.LogInformation("File location map saved to {OutputFile}", outputFile);
+                _logger.LogInformation("File location map saved to {OutputFile}", request.OutputPath);
             }
             catch (Exception ex)
             {

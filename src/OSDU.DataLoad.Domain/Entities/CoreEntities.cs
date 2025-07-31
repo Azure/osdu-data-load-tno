@@ -151,10 +151,11 @@ public static class DataLoadingOrder
         { TnoDataType.MiscMasterData, "manifests/misc-master-data-manifests" },
         { TnoDataType.Wells, "manifests/master-well-data-manifests" },
         { TnoDataType.Wellbores, "manifests/master-wellbore-data-manifests" },
-        { TnoDataType.Documents, "TNO/provided/TNO/work-products/documents" },
-        { TnoDataType.WellLogs, "TNO/provided/TNO/work-products/well logs" },
-        { TnoDataType.WellMarkers, "TNO/provided/TNO/work-products/markers" },
-        { TnoDataType.WellboreTrajectories, "TNO/provided/TNO/work-products/trajectories" },
-        { TnoDataType.WorkProducts, "TNO/provided/TNO/work-products" }
+
+        { TnoDataType.Documents, "TNO/provided/work-products/documents" },
+        { TnoDataType.WellLogs, "TNO/provided/work-products/well logs" },
+        { TnoDataType.WellMarkers, "TNO/provided/work-products/markers" },
+        { TnoDataType.WellboreTrajectories, "TNO/provided/work-products/trajectories" },
+        { TnoDataType.WorkProducts, "TNO/provided/work-products" }
     };
 }

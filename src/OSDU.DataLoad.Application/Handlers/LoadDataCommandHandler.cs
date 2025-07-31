@@ -35,7 +35,8 @@ public class LoadDataCommandHandler : IRequestHandler<LoadDataCommand, LoadResul
             return await _mediator.Send(new LoadFromManifestCommand 
             { 
                 SourcePath = request.SourcePath,
-                DataType = request.DataType
+                DataType = request.DataType,
+                FileLocationMappings = request.FileLocationMappings
             }, cancellationToken);
         }
         catch (Exception ex)

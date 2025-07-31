@@ -10,4 +10,5 @@ public record LoadDataCommand : IRequest<LoadResult>
 {
     public string SourcePath { get; init; } = string.Empty;
     public TnoDataType DataType { get; init; }
+    public Dictionary<TnoDataType, string>? FileLocationMappings { get; init; }
 }
