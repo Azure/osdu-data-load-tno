@@ -318,13 +318,15 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     {
                         try
                         {
-                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+                            // Create a new cancellation token that won't be cancelled when main operation completes
+                            using var backgroundCts = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // 5 minute timeout
+                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, backgroundCts.Token);
                         }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "Error in background workflow status check for RunId: {RunId}", result.RunId);
                         }
-                    }, cancellationToken);
+                    });
                 }
                 else
                 {
@@ -418,13 +420,15 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     {
                         try
                         {
-                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+                            // Create a new cancellation token that won't be cancelled when main operation completes
+                            using var backgroundCts = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // 5 minute timeout
+                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, backgroundCts.Token);
                         }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "Error in background workflow status check for RunId: {RunId}", result.RunId);
                         }
-                    }, cancellationToken);
+                    });
                 }
                 else
                 {
@@ -505,7 +509,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error checking workflow status for {RunId}, attempt {Attempt}/{MaxAttempts}",
+                _logger.LogWarning(ex, "Timed out checking workflow status for {RunId}, attempt {Attempt}/{MaxAttempts}",
                     runId, attempt + 1, maxAttempts);
             }
         }
