@@ -201,6 +201,12 @@ fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
 - Restart the OSDU-Storage pods
 
 
+### 4. No container app logs
+**Symptoms**: No logs in the container app. You may see a kubernetes error.
+
+**Solutions**:
+- **Redeploy**: Redeploy the container with `az deploy`
+
 ## Contributing
 
 This solution follows Clean Architecture and CQRS principles. For detailed information on contributing:
