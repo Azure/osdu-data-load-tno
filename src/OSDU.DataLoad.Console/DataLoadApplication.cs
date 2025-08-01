@@ -401,47 +401,47 @@ public class DataLoadApplication
             var startTime = DateTime.UtcNow;
 
             //// Step 1: Create Legal Tag
-            //_logger.LogInformation("Step 1: Creating legal tag");
-            //var legalTagResult = await _mediator.Send(new CreateLegalTagCommand
-            //{
-            //    LegalTagName = legalTag
-            //});
-            //DisplayStepResult("Legal Tag Creation", legalTagResult);
-            //overallSuccess = overallSuccess && legalTagResult.IsSuccess;
+            _logger.LogInformation("Step 1: Creating legal tag");
+            var legalTagResult = await _mediator.Send(new CreateLegalTagCommand
+            {
+                LegalTagName = legalTag
+            });
+            DisplayStepResult("Legal Tag Creation", legalTagResult);
+            overallSuccess = overallSuccess && legalTagResult.IsSuccess;
 
-            //if (!legalTagResult.IsSuccess)
-            //{
-            //    _logger.LogError("Creating legal tag failed. Check for authorization issues. User must have users.datalake.ops and users@<data partition>.dataservices.energy roles.");
-            //}
+            if (!legalTagResult.IsSuccess)
+            {
+                _logger.LogError("Creating legal tag failed. Check for authorization issues. User must have users.datalake.ops and users@<data partition>.dataservices.energy roles.");
+            }
 
             //// Step 2: Upload Dataset Files 
-            //_logger.LogInformation("Step 2: Uploading dataset files from configured directories");
-            //var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
-            //DisplayStepResult("Dataset File Upload", uploadResult);
-            //overallSuccess = overallSuccess && uploadResult.IsSuccess;
+            _logger.LogInformation("Step 2: Uploading dataset files from configured directories");
+            var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
+            DisplayStepResult("Dataset File Upload", uploadResult);
+            overallSuccess = overallSuccess && uploadResult.IsSuccess;
 
-            //if (!uploadResult.IsSuccess)
-            //{
-            //    _logger.LogError("Uploading dataset files was not successful. Check logs for how many files failed.");
-            //}
+            if (!uploadResult.IsSuccess)
+            {
+                _logger.LogError("Uploading dataset files was not successful. Check logs for how many files failed.");
+            }
 
             //// Step 3: Generate Manifests
-            //_logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
-            //var manifestResult = await _mediator.Send(new GenerateManifestsCommand
-            //{
-            //    SourceDataPath = source,
-            //    OutputPath = source,
-            //    DataPartition = dataPartition,
-            //    LegalTag = legalTag,
-            //    AclViewer = aclViewer,
-            //    AclOwner = aclOwner
-            //});
-            //DisplayStepResult("Manifest Generation", manifestResult);
-            //overallSuccess = overallSuccess && manifestResult.IsSuccess;
-            //if (!manifestResult.IsSuccess)
-            //{
-            //    _logger.LogError("Generating manifests was not successful. Check input directory paths.");
-            //}
+            _logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
+            var manifestResult = await _mediator.Send(new GenerateManifestsCommand
+            {
+                SourceDataPath = source,
+                OutputPath = source,
+                DataPartition = dataPartition,
+                LegalTag = legalTag,
+                AclViewer = aclViewer,
+                AclOwner = aclOwner
+            });
+            DisplayStepResult("Manifest Generation", manifestResult);
+            overallSuccess = overallSuccess && manifestResult.IsSuccess;
+            if (!manifestResult.IsSuccess)
+            {
+                _logger.LogError("Generating manifests was not successful. Check input directory paths.");
+            }
 
             // Step 4: Submit Manifests to Workflow Service
             _logger.LogInformation("Step 4: Submitting manifests to workflow service");
