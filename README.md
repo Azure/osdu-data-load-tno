@@ -1,13 +1,12 @@
 # OSDU Data Load TNO - C# Implementation
 
-A modern C# application for loading TNO (Netherlands Organisation for Applied Scientific Research) data into the OSDU platform. This tool provides complete functional equivalency with the original Python solution while offering improved performance, reliability, and maintainability.
+An improved C# application for loading TNO (Netherlands Organisation for Applied Scientific Research) data into the OSDU platform.
 
 ## Key Features
 
 - **Simple CLI Interface** - Three intuitive commands to get you started
 - **Automatic Processing** - Handles all TNO data types in the correct dependency order
 - **File Upload Support** - Complete 4-step OSDU file upload workflow
-- **Smart Batching** - Automatically splits large datasets to meet OSDU limits
 - **Secure Authentication** - Uses Azure Identity for passwordless authentication
 - **Progress Tracking** - Real-time progress updates and detailed logging
 - **Error Resilience** - Comprehensive retry policies and error handling
@@ -44,7 +43,7 @@ Before you begin, ensure you have:
 - **.NET 9.0** or later installed
 - **Azure CLI** for authentication: `az login --tenant your-tenant-id`
 - [**Azure Developer CLI (azd)** for deployments](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
-- **OSDU Platform Access** with `users.datalake.ops` role
+- **OSDU Platform Access** with `users.datalake.ops` and `users@<data partition>.dataservices.energy roles` role
 - **Visual Studio** or **VS Code** (optional, for development)
 
 ### 2. Configure the Application
@@ -153,9 +152,9 @@ dotnet run -- load --source "~/osdu-data/tno"
 
 ### Assign managed identity `users.datalake.ops` role
 
-Get the object ID of the managed identity and assign it `users.datalake.ops` on your data partition.
+**Important**: Get the object ID of the managed identity and assign it `users.datalake.ops` and `users@<data partition>.dataservices.energy roles`on your data partition.
 
-### Deploy the Application
+### Deploy the Application and monitor the container's console output
 
   ```bash
   azd deploy
