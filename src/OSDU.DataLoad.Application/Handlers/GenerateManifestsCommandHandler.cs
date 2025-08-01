@@ -1,217 +1,135 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
-using OSDU.DataLoad.Domain.Interfaces;
 
 namespace OSDU.DataLoad.Application.Handlers;
 
 /// <summary>
-/// Handler for generating all TNO manifests from CSV data using templates
-/// This corresponds to the "GenerateManifests" step in the Python solution
+/// Handler for generating all TNO manifests (both work product and non-work product)
 /// </summary>
 public class GenerateManifestsCommandHandler : IRequestHandler<GenerateManifestsCommand, LoadResult>
 {
+    private readonly IMediator _mediator;
     private readonly ILogger<GenerateManifestsCommandHandler> _logger;
-    private readonly OsduConfiguration _configuration;
-    private readonly IManifestGenerator _manifestGenerator;
 
-    public GenerateManifestsCommandHandler(
-        ILogger<GenerateManifestsCommandHandler> logger,
-        IOptions<OsduConfiguration> configuration,
-        IManifestGenerator manifestGenerator)
+    public GenerateManifestsCommandHandler(IMediator mediator, ILogger<GenerateManifestsCommandHandler> logger)
     {
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _configuration = configuration?.Value ?? throw new ArgumentNullException(nameof(configuration));
-        _manifestGenerator = manifestGenerator ?? throw new ArgumentNullException(nameof(manifestGenerator));
     }
 
     public async Task<LoadResult> Handle(GenerateManifestsCommand request, CancellationToken cancellationToken)
     {
         var startTime = DateTime.UtcNow;
-        _logger.LogInformation("Starting manifest generation from {SourcePath}", request.SourceDataPath);
-
-        if (string.IsNullOrWhiteSpace(request.SourceDataPath))
-        {
-            return new LoadResult
-            {
-                IsSuccess = false,
-                Message = "Source data path is required",
-                Duration = DateTime.UtcNow - startTime
-            };
-        }
-
-        if (!Directory.Exists(request.SourceDataPath))
-        {
-            return new LoadResult
-            {
-                IsSuccess = false,
-                Message = $"Source directory does not exist: {request.SourceDataPath}",
-                Duration = DateTime.UtcNow - startTime
-            };
-        }
-
-        var manifestDir = Path.Combine(request.OutputPath, "manifests");
+        _logger.LogInformation("Starting manifest generation for all TNO data types");
+        _logger.LogInformation("Source: {SourceDataPath}", request.SourceDataPath);
+        _logger.LogInformation("Output: {OutputPath}", request.OutputPath);
 
         try
         {
-            // Remove existing manifests directory
+            var overallSuccess = true;
+            var totalProcessed = 0;
+            var totalSuccessful = 0;
+            var totalFailed = 0;
+            var combinedMessages = new List<string>();
+
+            var manifestDir = Path.Combine(request.OutputPath, "manifests");
+
+            // Remove existing non-work product manifests directory
             if (Directory.Exists(manifestDir))
             {
                 Directory.Delete(manifestDir, true);
             }
 
-            // Create manifests directory structure
-            Directory.CreateDirectory(manifestDir);
 
-            var manifestGenerations = new[]
+            // Step 1: Generate Non-Work Product Manifests (reference data, no dependencies)
+            _logger.LogInformation("Generating non-work product manifests (reference data)");
+            var nonWorkProductResult = await _mediator.Send(new GenerateNonWorkProductManifestCommand
             {
-                new {
-                    Type = "reference_data",
-                    MappingFile = "tno_ref_data_template_mapping.json",
-                    DataDir = "reference-data",
-                    OutputDir = "reference-manifests",
-                    GroupFile = true
-                },
-                new {
-                    Type = "master_data",
-                    MappingFile = "tno_misc_master_data_template_mapping.json",
-                    DataDir = "master-data/Misc_master_data",
-                    OutputDir = "misc-master-data-manifests",
-                    GroupFile = true
-                },
-                new { 
-                    Type = "master_data", 
-                    MappingFile = "tno_well_data_template_mapping.json",
-                    DataDir = "master-data/Well",
-                    OutputDir = "master-well-data-manifests",
-                    GroupFile = false
-                }
-                ,
-                new {
-                    Type = "master_data",
-                    MappingFile = "tno_wellbore_data_template_mapping.json",
-                    DataDir = "master-data/Wellbore",
-                    OutputDir = "master-wellbore-data-manifests",
-                    GroupFile = false
-                }
-            };
+                SourceDataPath = request.SourceDataPath,
+                OutputPath = manifestDir,
+                DataPartition = request.DataPartition,
+                LegalTag = request.LegalTag,
+                AclViewer = request.AclViewer,
+                AclOwner = request.AclOwner,
+                ManifestConfigs = ManifestGenerationConfiguration.NonWorkProductManifestConfigs
+            }, cancellationToken);
 
-            var totalGenerations = manifestGenerations.Length;
-            var completedGenerations = 0;
+            overallSuccess = overallSuccess && nonWorkProductResult.IsSuccess;
+            totalProcessed += nonWorkProductResult.ProcessedRecords;
+            totalSuccessful += nonWorkProductResult.SuccessfulRecords;
+            totalFailed += nonWorkProductResult.FailedRecords;
 
-            foreach (var generation in manifestGenerations)
+            if (!string.IsNullOrEmpty(nonWorkProductResult.Message))
+                combinedMessages.Add($"Non-Work Product: {nonWorkProductResult.Message}");
+
+            if (!nonWorkProductResult.IsSuccess)
+                _logger.LogWarning("Non-work product manifest generation failed: {Error}", nonWorkProductResult.ErrorDetails);
+            else
+                _logger.LogInformation("Non-work product manifest generation completed successfully");
+
+            // Step 2: Generate Work Product Manifests (depends on uploaded mapping files)
+            _logger.LogInformation("Generating work product manifests (requires uploaded mapping files)");
+            var workProductResult = await _mediator.Send(new GenerateWorkProductManifestCommand
             {
-                _logger.LogInformation("Generating {Type} manifests using {MappingFile}", generation.Type, generation.MappingFile);
-                
-                var success = await GenerateManifestGroup(
-                    request.SourceDataPath, 
-                    generation.MappingFile, 
-                    generation.Type, 
-                    generation.DataDir, 
-                    Path.Combine(manifestDir, generation.OutputDir), 
-                    generation.GroupFile, 
-                    request.DataPartition,
-                    request.AclViewer,
-                    request.AclOwner,
-                    request.LegalTag,
-                    cancellationToken);
+                SourceDataPath = request.SourceDataPath,
+                WorkProductsMappingPath = Path.Combine(request.SourceDataPath, "output"),
+                DataPartition = request.DataPartition,
+                LegalTag = request.LegalTag,
+                AclViewer = request.AclViewer,
+                AclOwner = request.AclOwner,
+                ManifestConfigs = ManifestGenerationConfiguration.WorkProductManifestConfigs
+            }, cancellationToken);
 
-                if (!success)
-                {
-                    return new LoadResult
-                    {
-                        IsSuccess = false,
-                        Message = $"Failed to generate {generation.Type} manifests",
-                        Duration = DateTime.UtcNow - startTime
-                    };
-                }
+            overallSuccess = overallSuccess && workProductResult.IsSuccess;
+            totalProcessed += workProductResult.ProcessedRecords;
+            totalSuccessful += workProductResult.SuccessfulRecords;
+            totalFailed += workProductResult.FailedRecords;
 
-                completedGenerations++;
-                _logger.LogInformation("Completed {Type} manifests ({Completed}/{Total})", 
-                    generation.Type, completedGenerations, totalGenerations);
-            }
+            if (!string.IsNullOrEmpty(workProductResult.Message))
+                combinedMessages.Add($"Work Product: {workProductResult.Message}");
 
+            if (!workProductResult.IsSuccess)
+                _logger.LogWarning("Work product manifest generation failed: {Error}", workProductResult.ErrorDetails);
+            else
+                _logger.LogInformation("Work product manifest generation completed successfully");
+
+            // Combine results
             var duration = DateTime.UtcNow - startTime;
-            _logger.LogInformation("Manifest generation completed in {Duration:mm\\:ss}", duration);
+            var message = string.Join("; ", combinedMessages);
 
-            return new LoadResult
+            var result = new LoadResult
             {
-                IsSuccess = true,
-                Message = $"Successfully generated all manifests in '{manifestDir}'",
-                ProcessedRecords = totalGenerations,
-                SuccessfulRecords = completedGenerations,
-                Duration = duration
+                IsSuccess = overallSuccess,
+                ProcessedRecords = totalProcessed,
+                SuccessfulRecords = totalSuccessful,
+                FailedRecords = totalFailed,
+                Duration = duration,
+                Message = overallSuccess ? $"All manifests generated successfully. {message}" : $"Manifest generation completed with errors. {message}",
+                ErrorDetails = overallSuccess ? string.Empty : "One or more manifest generation steps failed. Check logs for details."
             };
+
+            _logger.LogInformation("Manifest generation completed - Success: {Success}, Processed: {Processed}, Duration: {Duration:mm\\:ss}",
+                overallSuccess, totalProcessed, duration);
+
+            return result;
         }
         catch (Exception ex)
         {
+            var duration = DateTime.UtcNow - startTime;
             _logger.LogError(ex, "Error during manifest generation");
+
             return new LoadResult
             {
                 IsSuccess = false,
-                Message = "Failed to generate manifests",
-                ErrorDetails = ex.Message,
-                Duration = DateTime.UtcNow - startTime
+                ProcessedRecords = 0,
+                SuccessfulRecords = 0,
+                FailedRecords = 0,
+                Duration = duration,
+                Message = "Manifest generation failed due to unexpected error",
+                ErrorDetails = ex.Message
             };
-        }
-    }
-
-    private async Task<bool> GenerateManifestGroup(
-        string sourceDataPath, 
-        string mappingFile, 
-        string templateType, 
-        string dataDir, 
-        string outputDir, 
-        bool groupFile, 
-        string dataPartition,
-        string aclViewer,
-        string aclOwner,
-        string legalTag,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            // Create output directory
-            Directory.CreateDirectory(outputDir);
-
-            var configDir = Path.Combine(sourceDataPath, "config");
-            var mappingFilePath = Path.Combine(configDir, mappingFile);
-
-            if (!File.Exists(mappingFilePath))
-            {
-                _logger.LogError("Mapping file not found: {MappingFile}", mappingFilePath);
-                return false;
-            }
-
-            // Use the C# manifest generator instead of Python scripts
-            var success = await _manifestGenerator.GenerateManifestsFromCsvAsync(
-                mappingFilePath,
-                templateType,
-                dataDir,
-                outputDir,
-                sourceDataPath,
-                dataPartition,
-                aclViewer,
-                aclOwner,
-                legalTag,
-                groupFile,
-                cancellationToken);
-
-            if (!success)
-            {
-                _logger.LogError("Failed to generate manifests using C# generator");
-                return false;
-            }
-
-            _logger.LogInformation("Successfully generated manifests in: {OutputDir}", outputDir);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating manifest group");
-            return false;
         }
     }
 }

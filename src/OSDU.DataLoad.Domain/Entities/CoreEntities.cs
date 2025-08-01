@@ -1,3 +1,5 @@
+using OSDU.DataLoad.Domain.Entities;
+
 namespace OSDU.DataLoad.Domain.Entities;
 
 /// <summary>
@@ -133,29 +135,188 @@ public static class DataLoadingOrder
         TnoDataType.Wellbores,
         
         // Phase 3: File Data (depends on master data)
-        TnoDataType.Documents,
-        TnoDataType.WellLogs,
         TnoDataType.WellMarkers,
         TnoDataType.WellboreTrajectories,
-        
-        // Phase 4: Work Products (depends on file data)
-        TnoDataType.WorkProducts
+        TnoDataType.WellLogs,
+        TnoDataType.Documents,
     };
 
     /// <summary>
     /// Gets the subdirectory mapping for each data type (matches Python solution structure)
     /// </summary>
-    public static readonly Dictionary<TnoDataType, string> DirectoryMapping = new()
+    public static readonly Dictionary<TnoDataType, string> ManifestDirectories = new()
     {
         { TnoDataType.ReferenceData, "manifests/reference-manifests" },
         { TnoDataType.MiscMasterData, "manifests/misc-master-data-manifests" },
         { TnoDataType.Wells, "manifests/master-well-data-manifests" },
         { TnoDataType.Wellbores, "manifests/master-wellbore-data-manifests" },
 
-        { TnoDataType.Documents, "TNO/provided/work-products/documents" },
-        { TnoDataType.WellLogs, "TNO/provided/work-products/well logs" },
-        { TnoDataType.WellMarkers, "TNO/provided/work-products/markers" },
-        { TnoDataType.WellboreTrajectories, "TNO/provided/work-products/trajectories" },
-        { TnoDataType.WorkProducts, "TNO/provided/work-products" }
+        { TnoDataType.Documents, "manifests/documents-manifests" },
+        { TnoDataType.WellLogs, "manifests/well-logs-manifests" },
+        { TnoDataType.WellMarkers, "manifests/well-markers-manifests" },
+        { TnoDataType.WellboreTrajectories, "manifests/wellbore-trajectories-manifests" }
     };
+}
+
+/// <summary>
+/// Configuration for dataset directory processing and output file mapping
+/// </summary>
+public static class DatasetConfiguration
+{
+    /// <summary>
+    /// Maps dataset directory names to their corresponding output file names for tracking uploads
+    /// </summary>
+    public static readonly Dictionary<string, string> DatasetDirectoryToOutputFile = new()
+    {
+        { "datasets/documents", "loaded-documents-datasets.json" },
+        { "datasets/well-logs", "loaded-welllogs-datasets.json" },
+        { "datasets/markers", "loaded-marker-datasets.json" },
+        { "datasets/trajectories", "loaded-trajectories-datasets.json" }
+    };
+
+    /// <summary>
+    /// Gets the output file name for a given dataset directory
+    /// </summary>
+    /// <param name="datasetDirectory">The dataset directory path (relative)</param>
+    /// <returns>The output file name, or null if not found</returns>
+    public static string? GetOutputFileName(string datasetDirectory)
+    {
+        // Normalize the directory path for comparison
+        var normalizedPath = datasetDirectory.Replace('\\', '/').ToLowerInvariant();
+        
+        // Try exact match first
+        if (DatasetDirectoryToOutputFile.TryGetValue(normalizedPath, out var outputFile))
+        {
+            return outputFile;
+        }
+
+        // Try to find by directory name (last part of path)
+        var directoryName = Path.GetFileName(normalizedPath);
+        foreach (var (key, value) in DatasetDirectoryToOutputFile)
+        {
+            if (key.EndsWith($"/{directoryName}", StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets all configured dataset directory names
+    /// </summary>
+    public static IEnumerable<string> GetDatasetDirectories()
+    {
+        return DatasetDirectoryToOutputFile.Keys;
+    }
+
+    /// <summary>
+    /// Gets the output file mappings for work product data types
+    /// </summary>
+    /// <param name="outputPath">The base output directory path</param>
+    /// <returns>Dictionary mapping TnoDataType to output file paths</returns>
+    //public static Dictionary<TnoDataType, string> GetWorkProductOutputFileMappings(string outputPath)
+    //{
+    //    return new Dictionary<TnoDataType, string>
+    //    {
+    //        { TnoDataType.Documents, Path.Combine(outputPath, DatasetDirectoryToOutputFile["datasets/documents"]) },
+    //        { TnoDataType.WellLogs, Path.Combine(outputPath, DatasetDirectoryToOutputFile["datasets/well-logs"]) },
+    //        { TnoDataType.WellMarkers, Path.Combine(outputPath, DatasetDirectoryToOutputFile["datasets/markers"]) },
+    //        { TnoDataType.WellboreTrajectories, Path.Combine(outputPath, DatasetDirectoryToOutputFile["datasets/trajectories"]) }
+    //    };
+    //}
+}
+
+/// <summary>
+/// Configuration for manifest generation processing
+/// </summary>
+public static class ManifestGenerationConfiguration
+{
+    /// <summary>
+    /// Configuration for non-work product manifest generation
+    /// </summary>
+    public static readonly ManifestGenerationConfig[] NonWorkProductManifestConfigs = new[]
+    {
+        new ManifestGenerationConfig
+        {
+            Type = "reference_data",
+            MappingFile = "tno_ref_data_template_mapping.json",
+            DataDir = "reference-data",
+            OutputDir = "reference-manifests",
+            GroupFile = true
+        },
+        new ManifestGenerationConfig
+        {
+            Type = "master_data",
+            MappingFile = "tno_misc_master_data_template_mapping.json",
+            DataDir = "master-data/Misc_master_data",
+            OutputDir = "misc-master-data-manifests",
+            GroupFile = true
+        },
+        new ManifestGenerationConfig
+        {
+            Type = "master_data",
+            MappingFile = "tno_well_data_template_mapping.json",
+            DataDir = "master-data/Well",
+            OutputDir = "master-well-data-manifests",
+            GroupFile = false
+        },
+        new ManifestGenerationConfig
+        {
+            Type = "master_data",
+            MappingFile = "tno_wellbore_data_template_mapping.json",
+            DataDir = "master-data/Wellbore",
+            OutputDir = "master-wellbore-data-manifests",
+            GroupFile = false
+        }
+    };
+
+    public static readonly ManifestGenerationConfig[] WorkProductManifestConfigs = new[]
+    {
+        new ManifestGenerationConfig
+        {
+            Type = "WellMarkers",
+            MappingFile = "loaded-marker-datasets.json",
+            DataDir = "TNO/provided/work-products/markers",
+            OutputDir = "well-markers-manifests",
+            GroupFile = false
+        },
+        new ManifestGenerationConfig
+        {
+            Type = "WellboreTrajectories",
+            MappingFile = "loaded-trajectories-datasets.json",
+            DataDir = "TNO/provided/work-products/trajectories",
+            OutputDir = "wellbore-trajectories-manifests",
+            GroupFile = false
+        },
+        new ManifestGenerationConfig
+        {
+            Type = "WellLogs",
+            MappingFile = "loaded-welllogs-datasets.json",
+            DataDir = "TNO/provided/work-products/well logs",
+            OutputDir = "well-logs-manifests",
+            GroupFile = false
+        },
+        new ManifestGenerationConfig
+        {
+            Type = "Documents",
+            MappingFile = "loaded-documents-datasets.json",
+            DataDir = "TNO/provided/work-products/documents",
+            OutputDir = "documents-manifests",
+            GroupFile = false
+        }
+    };
+}
+
+/// <summary>
+/// Configuration for individual manifest generation
+/// </summary>
+public class ManifestGenerationConfig
+{
+    public string Type { get; init; } = string.Empty;
+    public string MappingFile { get; init; } = string.Empty;
+    public string DataDir { get; init; } = string.Empty;
+    public string OutputDir { get; init; } = string.Empty;
+    public bool GroupFile { get; init; }
 }

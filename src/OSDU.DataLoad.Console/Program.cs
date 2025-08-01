@@ -59,10 +59,6 @@ public class Program
             var logger = host?.Services?.GetService<ILogger<Program>>();
             logger?.LogCritical(ex, "Fatal error occurred - preventing container crash: {Message}", ex.Message);
             
-            // Log to console as backup in case logging isn't working
-            System.Console.WriteLine($"FATAL ERROR - Process ID {Environment.ProcessId}: {ex.Message}");
-            System.Console.WriteLine($"Stack Trace: {ex.StackTrace}");
-            
             // Return non-zero exit code but don't let the process crash
             return 1;
         }
@@ -75,7 +71,8 @@ public class Program
             catch (Exception ex)
             {
                 // Even disposal should not crash the container
-                System.Console.WriteLine($"Error during cleanup: {ex.Message}");
+                var logger = host?.Services?.GetService<ILogger<Program>>();
+                logger?.LogError(ex, "Error during cleanup: {Message}", ex.Message);
             }
         }
     }
@@ -118,22 +115,30 @@ public class Program
                         osduConfig.TestDataUrl = context.Configuration["TestDataUrl"]!;
                 });
 
+                // Path configuration - centralized file and directory paths
+                services.AddSingleton<PathConfiguration>(provider =>
+                {
+                    var basePath = context.Configuration["BasePath"] ?? 
+                                   Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
+                    return new PathConfiguration { BaseDataPath = basePath };
+                });
+
                 // MediatR
                 services.AddMediatR(cfg => {
-                    cfg.RegisterServicesFromAssembly(typeof(OSDU.DataLoad.Application.Commands.LoadDataCommand).Assembly);
+                    cfg.RegisterServicesFromAssembly(typeof(OSDU.DataLoad.Application.Commands.CreateLegalTagCommand).Assembly);
                 });
 
                 // Domain services
                 services.AddScoped<IDataTransformer, TnoDataTransformer>();
                 services.AddScoped<IFileProcessor, FileProcessor>();
-                services.AddScoped<IManifestGenerator, ManifestGeneratorV2>();
+                services.AddScoped<IManifestGenerator, ManifestGenerator>();
                 services.AddScoped<IRetryPolicy, ExponentialRetryPolicy>();
                 
                 // Progress reporting services
                 services.AddScoped<IManifestProgressReporter, ManifestProgressReporter>();
 
-                // Infrastructure services with container-friendly configuration
-                services.AddHttpClient<IOsduClient, OsduHttpClient>()
+                // Consolidated OSDU service with direct HTTP client
+                services.AddHttpClient<IOsduService, OsduService>()
                     .ConfigureHttpClient(client =>
                     {
                         // Container-friendly timeouts
@@ -155,7 +160,7 @@ public class Program
                 logging.ClearProviders();
                 
                 // Container-friendly logging
-                logging.AddConsole(options =>
+                logging.AddSimpleConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";

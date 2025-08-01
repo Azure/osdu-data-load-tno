@@ -44,7 +44,7 @@ public class DataLoadApplication
             exitCode = command switch
             {
                 "load" => await HandleLoadCommand(args),
-                "download-tno" => await HandleDownloadTnoCommand(args),
+                "download" => await HandleDownloadCommand(args),
                 "help" or "--help" or "-h" => ShowHelp(),
                 _ => ShowHelp("Unknown command: " + command)
             };
@@ -57,8 +57,6 @@ public class DataLoadApplication
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Unexpected application error occurred");
-            System.Console.WriteLine($"❌ Unexpected error: {ex.Message}");
-            await Task.Delay(Timeout.Infinite);
             return 99; // General application error
         }
     }
@@ -67,7 +65,7 @@ public class DataLoadApplication
     {
         if (args.Length < 3)
         {
-            System.Console.WriteLine("❌ Usage: load --source <path>");
+            _logger.LogError("Invalid usage for load command: insufficient arguments");
             return -1;
         }
 
@@ -85,13 +83,12 @@ public class DataLoadApplication
 
         if (string.IsNullOrEmpty(source))
         {
-            System.Console.WriteLine("❌ --source is required");
+            _logger.LogError("Load command requires --source parameter");
             return -1;
         }
 
-        System.Console.WriteLine("🚀 OSDU Data Load TNO - Load Command");
-        System.Console.WriteLine($"📂 Source directory: {source}");
-        System.Console.WriteLine();
+        _logger.LogInformation("Starting OSDU Data Load TNO - Load Command");
+        _logger.LogInformation("Source directory: {Source}", source);
         
         DisplayConfigurationStatus();
 
@@ -99,11 +96,11 @@ public class DataLoadApplication
         return 0;
     }
 
-    private async Task<int> HandleDownloadTnoCommand(string[] args)
+    private async Task<int> HandleDownloadCommand(string[] args)
     {
         if (args.Length < 3)
         {
-            System.Console.WriteLine("❌ Usage: download-tno --destination <path> [--overwrite]");
+            _logger.LogError("Invalid usage for download command: insufficient arguments");
             return -1;
         }
 
@@ -125,18 +122,17 @@ public class DataLoadApplication
 
         if (string.IsNullOrEmpty(destination))
         {
-            System.Console.WriteLine("❌ --destination is required");
+            _logger.LogError("Download command requires --destination parameter");
             return -1;
         }
 
-        System.Console.WriteLine("📥 OSDU Data Load TNO - Download Command");
-        System.Console.WriteLine($"📂 Destination directory: {destination}");
-        System.Console.WriteLine($"🔄 Overwrite existing: {(overwrite ? "Yes" : "No")}");
-        System.Console.WriteLine();
+        _logger.LogInformation("Starting OSDU Data Load TNO - Download Command");
+        _logger.LogInformation("Destination directory: {Destination}", destination);
+        _logger.LogInformation("Overwrite existing: {Overwrite}", overwrite);
         
         DisplayConfigurationStatus();
 
-        await DownloadTnoDataAsync(destination, overwrite);
+        await DownloadDataAsync(destination, overwrite);
         return 0;
     }
 
@@ -148,9 +144,8 @@ public class DataLoadApplication
         _logger.LogInformation("No command specified - running default behavior");
         _logger.LogInformation("Default data path: {DefaultDataPath}", defaultDataPath);
 
-        System.Console.WriteLine("🚀 OSDU Data Load TNO - Default Mode");
-        System.Console.WriteLine($"📂 Using default data directory: {defaultDataPath}");
-        System.Console.WriteLine();
+        _logger.LogInformation("Starting OSDU Data Load TNO - Default Mode");
+        _logger.LogInformation("Using default data directory: {DefaultDataPath}", defaultDataPath);
         
         DisplayConfigurationStatus();
 
@@ -159,12 +154,11 @@ public class DataLoadApplication
         
         if (!dataExists)
         {
-            System.Console.WriteLine("📥 TNO test data not found - downloading automatically...");
-            System.Console.WriteLine();
+            _logger.LogInformation("TNO test data not found - downloading automatically");
 
             try
             {
-                var downloadResult = await _mediator.Send(new DownloadTnoDataCommand
+                var downloadResult = await _mediator.Send(new DownloadDataCommand
                 {
                     DestinationPath = defaultDataPath,
                     OverwriteExisting = false
@@ -174,30 +168,25 @@ public class DataLoadApplication
 
                 if (!downloadResult.IsSuccess)
                 {
-                    System.Console.WriteLine("❌ Failed to download TNO data. Cannot proceed with load operation.");
+                    _logger.LogError("Failed to download TNO data. Cannot proceed with load operation");
                     return -1;
                 }
 
-                System.Console.WriteLine();
-                System.Console.WriteLine("✅ Download completed successfully!");
-                System.Console.WriteLine();
+                _logger.LogInformation("Download completed successfully");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during automatic TNO data download");
-                System.Console.WriteLine($"❌ Download failed: {ex.Message}");
                 return -1;
             }
         }
         else
         {
-            System.Console.WriteLine("✅ TNO test data found - proceeding with load operation...");
-            System.Console.WriteLine();
+            _logger.LogInformation("TNO test data found - proceeding with load operation");
         }
 
         // Now run the load operation
-        System.Console.WriteLine("🔄 Starting data load operation...");
-        System.Console.WriteLine();
+        _logger.LogInformation("Starting data load operation");
 
         try
         {
@@ -207,7 +196,6 @@ public class DataLoadApplication
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during default load operation");
-            System.Console.WriteLine($"❌ Load operation failed: {ex.Message}");
             return -1;
         }
     }
@@ -256,48 +244,34 @@ public class DataLoadApplication
     {
         if (!string.IsNullOrEmpty(error))
         {
-            System.Console.WriteLine($"❌ {error}");
-            System.Console.WriteLine();
+            _logger.LogError("Help requested due to error: {Error}", error);
         }
 
-        System.Console.WriteLine("OSDU Data Load TNO v1.0 - Loads TNO data into OSDU platform");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Default Behavior (no arguments):");
-        System.Console.WriteLine("  When run without arguments, the application will:");
-        System.Console.WriteLine($"  1. Check for TNO data in {GetDefaultDataPath()}");
-        System.Console.WriteLine("  2. Download the data if not present");
-        System.Console.WriteLine("  3. Load all data types into OSDU platform");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Commands:");
-        System.Console.WriteLine("  load         Load all TNO data types into OSDU platform in the correct order");
-        System.Console.WriteLine("  download-tno Download and setup TNO test data from official repository");
-        System.Console.WriteLine("  help         Show this help message");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Usage:");
-        System.Console.WriteLine("  load --source <path>");
-        System.Console.WriteLine("  download-tno --destination <path> [--overwrite]");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Description:");
-        System.Console.WriteLine("  Loads TNO data from the specified directory in the following order:");
-        System.Console.WriteLine("    1. Reference Data       (manifests/reference-manifests/)");
-        System.Console.WriteLine("    2. Misc Master Data     (manifests/misc-master-data-manifests/)");
-        System.Console.WriteLine("    3. Wells                (manifests/master-well-data-manifests/)");
-        System.Console.WriteLine("    4. Wellbores            (manifests/master-wellbore-data-manifests/)");
-        System.Console.WriteLine("    5. Documents            (datasets/documents/)");
-        System.Console.WriteLine("    6. Well Logs            (datasets/well-logs/)");
-        System.Console.WriteLine("    7. Well Markers         (datasets/markers/)");
-        System.Console.WriteLine("    8. Wellbore Trajectories (datasets/trajectories/)");
-        System.Console.WriteLine("    9. Work Products        (TNO/provided/TNO/work-products/)");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Download TNO Test Data:");
-        System.Console.WriteLine("  download-tno --destination <path>    Download and setup test data");
-        System.Console.WriteLine("  download-tno --destination <path> --overwrite    Overwrite existing data");
-        System.Console.WriteLine();
-        System.Console.WriteLine("Examples:");
-        System.Console.WriteLine($"  dotnet run                           # Default: download data to {GetDefaultDataPath()} and load");
-        System.Console.WriteLine("  download-tno --destination \"C:\\Data\\open-test-data\"");
-        System.Console.WriteLine("  load --source \"C:\\Data\\open-test-data\"");
-        System.Console.WriteLine();
+        _logger.LogInformation("OSDU Data Load TNO v1.0 - Loads TNO data into OSDU platform");
+        _logger.LogInformation("Default Behavior (no arguments): When run without arguments, the application will:");
+        _logger.LogInformation("  1. Check for TNO data in {DefaultDataPath}", GetDefaultDataPath());
+        _logger.LogInformation("  2. Download the data if not present");
+        _logger.LogInformation("  3. Load all data types into OSDU platform");
+        _logger.LogInformation("Commands:");
+        _logger.LogInformation("  load         Load all TNO data types into OSDU platform in the correct order");
+        _logger.LogInformation("  download     Download and setup TNO test data from official repository");
+        _logger.LogInformation("  help         Show this help message");
+        _logger.LogInformation("Usage:");
+        _logger.LogInformation("  load --source <path>");
+        _logger.LogInformation("  download --destination <path> [--overwrite]");
+        _logger.LogInformation("Description:");
+        _logger.LogInformation("  Loads TNO data from the specified directory using the following steps:");
+        _logger.LogInformation("    1. Create Legal Tag     (if configured)");
+        _logger.LogInformation("    2. Upload Dataset Files (including mapping files required for work products)");
+        _logger.LogInformation("    3. Generate Manifests  (non-work product first, then work product)");
+        _logger.LogInformation("    4. Submit Workflow      (to OSDU platform)");
+        _logger.LogInformation("Download TNO Test Data:");
+        _logger.LogInformation("  download-tno --destination <path>    Download and setup test data");
+        _logger.LogInformation("  download-tno --destination <path> --overwrite    Overwrite existing data");
+        _logger.LogInformation("Examples:");
+        _logger.LogInformation("  dotnet run                           # Default: download data to {DefaultDataPath} and load", GetDefaultDataPath());
+        _logger.LogInformation("  download-tno --destination \"C:\\Data\\open-test-data\"");
+        _logger.LogInformation("  load --source \"C:\\Data\\open-test-data\"");
         
         DisplayConfigurationStatus();
 
@@ -326,6 +300,42 @@ public class DataLoadApplication
                value != "string.Empty";
     }
 
+    /// <summary>
+    /// Validates that all required configuration values are present for the load operation
+    /// </summary>
+    /// <returns>True if all required values are configured, false otherwise</returns>
+    private bool ValidateRequiredConfiguration()
+    {
+        var requiredSettings = new[]
+        {
+            ("BaseUrl", GetConfigValue("BaseUrl")),
+            ("TenantId", GetConfigValue("TenantId")),
+            ("ClientId", GetConfigValue("ClientId")),
+            ("LegalTag", GetConfigValue("LegalTag")),
+            ("AclOwner", GetConfigValue("AclOwner"))
+        };
+
+        var missingSettings = requiredSettings
+            .Where(setting => !IsConfigured(setting.Item2))
+            .Select(setting => setting.Item1)
+            .ToList();
+
+        if (missingSettings.Any())
+        {
+            _logger.LogError("Missing required configuration values:");
+            foreach (var setting in missingSettings)
+            {
+                _logger.LogError("- OSDU_{Setting} is not configured", setting);
+            }
+            _logger.LogError("These configuration values are required for the application to run.");
+            _logger.LogError("Please set them as environment variables (e.g., OSDU_BaseUrl) or in appsettings.json.");
+            return false;
+        }
+
+        _logger.LogInformation("All required configuration values are present");
+        return true;
+    }
+
     private static string GetDefaultDataPath()
     {
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
@@ -333,29 +343,18 @@ public class DataLoadApplication
 
     private void DisplayConfigurationStatus()
     {
-        System.Console.WriteLine("Environment Variables:");
-        System.Console.WriteLine("  Configure OSDU settings using environment variables with OSDU_ prefix:");
-        System.Console.WriteLine($"  OSDU_BaseUrl       = {GetConfigValue("BaseUrl")}");
-        System.Console.WriteLine($"  OSDU_TenantId      = {GetConfigValue("TenantId")}");
-        System.Console.WriteLine($"  OSDU_ClientId      = {GetConfigValue("ClientId")}");
-        System.Console.WriteLine($"  OSDU_DataPartition = {GetConfigValue("DataPartition")}");
-        System.Console.WriteLine($"  OSDU_LegalTag      = {GetConfigValue("LegalTag")}");
-        System.Console.WriteLine($"  OSDU_AclViewer     = {GetConfigValue("AclViewer")}");
-        System.Console.WriteLine($"  OSDU_AclOwner      = {GetConfigValue("AclOwner")}");
-        System.Console.WriteLine($"  OSDU_UserEmail     = {GetConfigValue("UserEmail")}");
-        System.Console.WriteLine();
+        _logger.LogInformation("Environment Variables Configuration:");
+        _logger.LogInformation("Configure OSDU settings using environment variables with OSDU_ prefix:");
+        _logger.LogInformation("OSDU_BaseUrl       = {BaseUrl}", GetConfigValue("BaseUrl"));
+        _logger.LogInformation("OSDU_TenantId      = {TenantId}", GetConfigValue("TenantId"));
+        _logger.LogInformation("OSDU_ClientId      = {ClientId}", GetConfigValue("ClientId"));
+        _logger.LogInformation("OSDU_DataPartition = {DataPartition}", GetConfigValue("DataPartition"));
+        _logger.LogInformation("OSDU_LegalTag      = {LegalTag}", GetConfigValue("LegalTag"));
+        _logger.LogInformation("OSDU_AclViewer     = {AclViewer}", GetConfigValue("AclViewer"));
+        _logger.LogInformation("OSDU_AclOwner      = {AclOwner}", GetConfigValue("AclOwner"));
+        _logger.LogInformation("OSDU_UserEmail     = {UserEmail}", GetConfigValue("UserEmail"));
 
-        _logger.LogInformation("Environment Variables:");
-        _logger.LogInformation("  OSDU_BaseUrl       = {BaseUrl}", GetConfigValue("BaseUrl"));
-        _logger.LogInformation("  OSDU_TenantId      = {TenantId}", GetConfigValue("TenantId"));
-        _logger.LogInformation("  OSDU_ClientId      = {ClientId}", GetConfigValue("ClientId"));
-        _logger.LogInformation("  OSDU_DataPartition = {DataPartition}", GetConfigValue("DataPartition"));
-        _logger.LogInformation("  OSDU_LegalTag      = {LegalTag}", GetConfigValue("LegalTag"));
-        _logger.LogInformation("  OSDU_AclViewer     = {AclViewer}", GetConfigValue("AclViewer"));
-        _logger.LogInformation("  OSDU_AclOwner      = {AclOwner}", GetConfigValue("AclOwner"));
-        _logger.LogInformation("  OSDU_UserEmail     = {UserEmail}", GetConfigValue("UserEmail"));
-
-        System.Console.WriteLine("Current Configuration Status:");
+        _logger.LogInformation("Current Configuration Status:");
         var baseUrl = GetConfigValue("BaseUrl");
         var tenantId = GetConfigValue("TenantId");
         var clientId = GetConfigValue("ClientId");
@@ -365,24 +364,14 @@ public class DataLoadApplication
         var aclOwner = GetConfigValue("AclOwner");
         var userEmail = GetConfigValue("UserEmail");
 
-        System.Console.WriteLine($"  ✓ BaseUrl: {(IsConfigured(baseUrl) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ TenantId: {(IsConfigured(tenantId) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ ClientId: {(IsConfigured(clientId) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ DataPartition: {(IsConfigured(dataPartition) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ LegalTag: {(IsConfigured(legalTag) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ AclViewer: {(IsConfigured(aclViewer) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ ActOwner: {(IsConfigured(aclOwner) ? "✅ Configured" : "❌ Not configured")}");
-        System.Console.WriteLine($"  ✓ UserEmail: {(IsConfigured(userEmail) ? "✅ Configured (user will be added to ops group)" : "⚠️ Not configured (user authorization setup will be skipped)")}");
-
-        _logger.LogInformation("Current Configuration Status:");
-        _logger.LogInformation("  ✓ BaseUrl: {Status}", IsConfigured(baseUrl) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ TenantId: {Status}", IsConfigured(tenantId) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ ClientId: {Status}", IsConfigured(clientId) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ DataPartition: {Status}", IsConfigured(dataPartition) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ LegalTag: {Status}", IsConfigured(legalTag) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ AclViewer: {Status}", IsConfigured(aclViewer) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ ActOwner: {Status}", IsConfigured(aclOwner) ? "Configured" : "Not configured");
-        _logger.LogInformation("  ✓ UserEmail: {Status}", IsConfigured(userEmail) ? "Configured (user will be added to ops group)" : "Not configured (user authorization setup will be skipped)");
+        _logger.LogInformation("BaseUrl: {Status} (REQUIRED)", IsConfigured(baseUrl) ? "Configured" : "Not configured");
+        _logger.LogInformation("TenantId: {Status} (REQUIRED)", IsConfigured(tenantId) ? "Configured" : "Not configured");
+        _logger.LogInformation("ClientId: {Status} (REQUIRED)", IsConfigured(clientId) ? "Configured" : "Not configured");
+        _logger.LogInformation("DataPartition: {Status}", IsConfigured(dataPartition) ? "Configured" : "Not configured");
+        _logger.LogInformation("LegalTag: {Status} (REQUIRED)", IsConfigured(legalTag) ? "Configured" : "Not configured");
+        _logger.LogInformation("AclViewer: {Status}", IsConfigured(aclViewer) ? "Configured" : "Not configured");
+        _logger.LogInformation("AclOwner: {Status} (REQUIRED)", IsConfigured(aclOwner) ? "Configured" : "Not configured");
+        _logger.LogInformation("UserEmail: {Status}", IsConfigured(userEmail) ? "Configured (user will be added to ops group)" : "Not configured (user authorization setup will be skipped)");
     }
 
     private async Task LoadAllDataAsync(string source)
@@ -390,75 +379,169 @@ public class DataLoadApplication
         _logger.LogInformation("Starting complete TNO data load operation");
         _logger.LogInformation("Source: {Source}", source);
 
+        // Validate required configuration before proceeding
+        if (!ValidateRequiredConfiguration())
+        {
+            _logger.LogError("Cannot proceed with load operation due to missing required configuration");
+            return;
+        }
+
         try
         {
-            System.Console.WriteLine($"🚀 Loading all TNO data types from {source}...");
-            System.Console.WriteLine();
+            _logger.LogInformation("Loading all TNO data types from {Source}", source);
 
-            var result = await _mediator.Send(new LoadAllDataCommand 
-            { 
-                SourcePath = source
+            // Get OSDU configuration for command parameters
+            var dataPartition = GetConfigValue("DataPartition");
+            var legalTag = GetConfigValue("LegalTag");
+            var aclViewer = GetConfigValue("AclViewer");
+            var aclOwner = GetConfigValue("AclOwner");
+
+            var overallSuccess = true;
+            var startTime = DateTime.UtcNow;
+
+            // Step 1: Create Legal Tag
+            _logger.LogInformation("Step 1: Creating legal tag");
+            var legalTagResult = await _mediator.Send(new CreateLegalTagCommand
+            {
+                LegalTagName = legalTag
             });
+            DisplayStepResult("Legal Tag Creation", legalTagResult);
+            overallSuccess = overallSuccess && legalTagResult.IsSuccess;
 
-            DisplayLoadResult(result);
+            //// Step 2: Upload Dataset Files 
+            if (overallSuccess)
+            {
+                _logger.LogInformation("Step 2: Uploading dataset files from configured directories");
+                var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
+                DisplayStepResult("Dataset File Upload", uploadResult);
+                var uploadSuccess = uploadResult.IsSuccess;
+                overallSuccess = overallSuccess && uploadResult.IsSuccess;
+            }
+            else
+            {
+                _logger.LogError("Skipping data set upload due to legal tag creation failure");
+            }
+
+            //Step 3: Generate Manifests
+            if (overallSuccess)
+            {
+                _logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
+                var manifestResult = await _mediator.Send(new GenerateManifestsCommand
+                {
+                    SourceDataPath = source,
+                    OutputPath = source,
+                    DataPartition = dataPartition,
+                    LegalTag = legalTag,
+                    AclViewer = aclViewer,
+                    AclOwner = aclOwner
+                });
+                DisplayStepResult("Manifest Generation", manifestResult);
+                overallSuccess = overallSuccess && manifestResult.IsSuccess;
+            }
+            else
+            {
+                _logger.LogError("Skipping manifest generate due to data set upload failure");
+            }
+
+            // Step 4: Submit Manifests to Workflow Service
+            if (overallSuccess)
+            {
+                _logger.LogInformation("Step 4: Submitting manifests to workflow service");
+                
+                // Use the manifests directory that contains both work product and non-work product manifests
+                var manifestsDirectory = Path.Combine(source, "manifests");
+
+                var workflowResult = await _mediator.Send(new SubmitManifestsToWorkflowServiceCommand
+                {
+                    SourceDataPath = source,
+                    DataPartition = dataPartition
+                });
+                DisplayStepResult("Manifest Workflow Submission", workflowResult);
+                overallSuccess = overallSuccess && workflowResult.IsSuccess;
+             }
+             else
+             {
+                 _logger.LogError("Skipping workflow submission due to manifest generation failure");
+             }
+            
+            // Display overall results
+            var totalDuration = DateTime.UtcNow - startTime;
+            _logger.LogInformation("Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", 
+                overallSuccess ? "Success" : "Failed", totalDuration);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during load operation");
-            System.Console.WriteLine($"❌ Load operation failed: {ex.Message}");
+        }
+    }
+
+    private static bool IsUploadableFile(string filePath)
+    {
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        var excludedExtensions = new[] { ".json", ".log", ".txt", ".md" };
+        return !excludedExtensions.Contains(extension) && !Path.GetFileName(filePath).StartsWith(".");
+    }
+
+    private void DisplayStepResult(string stepName, LoadResult result)
+    {
+        _logger.LogInformation("{StepName}: {Status}", stepName, result.IsSuccess ? "Success" : "Failed");
+        if (result.ProcessedRecords > 0)
+        {
+            _logger.LogInformation("Processed: {ProcessedRecords}, Successful: {SuccessfulRecords}, Failed: {FailedRecords}", 
+                result.ProcessedRecords, result.SuccessfulRecords, result.FailedRecords);
+        }
+        if (!string.IsNullOrEmpty(result.Message))
+        {
+            _logger.LogInformation("Message: {Message}", result.Message);
+        }
+        if (!result.IsSuccess && !string.IsNullOrEmpty(result.ErrorDetails))
+        {
+            _logger.LogError("Error: {ErrorDetails}", result.ErrorDetails);
         }
     }
 
     private void DisplayLoadResult(LoadResult result)
     {
-        System.Console.WriteLine();
-        System.Console.WriteLine($"📊 Load Results:");
-        System.Console.WriteLine($"   Status: {(result.IsSuccess ? "✅ Success" : "❌ Failed")}");
-        System.Console.WriteLine($"   Processed Records: {result.ProcessedRecords}");
-        System.Console.WriteLine($"   Successful Records: {result.SuccessfulRecords}");
-        System.Console.WriteLine($"   Failed Records: {result.FailedRecords}");
-        System.Console.WriteLine($"   Duration: {result.Duration}");
+        _logger.LogInformation("Load Results - Status: {Status}", result.IsSuccess ? "Success" : "Failed");
+        _logger.LogInformation("Processed Records: {ProcessedRecords}", result.ProcessedRecords);
+        _logger.LogInformation("Successful Records: {SuccessfulRecords}", result.SuccessfulRecords);
+        _logger.LogInformation("Failed Records: {FailedRecords}", result.FailedRecords);
+        _logger.LogInformation("Duration: {Duration}", result.Duration);
 
         if (!string.IsNullOrEmpty(result.Message))
         {
-            System.Console.WriteLine($"   Message: {result.Message}");
+            _logger.LogInformation("Message: {Message}", result.Message);
         }
 
         if (!string.IsNullOrEmpty(result.ErrorDetails))
         {
-            System.Console.WriteLine();
-            System.Console.WriteLine("❌ Error Details:");
-            System.Console.WriteLine($"   {result.ErrorDetails}");
+            _logger.LogError("Error Details: {ErrorDetails}", result.ErrorDetails);
         }
 
         if (result.ProcessedRecords > 0)
         {
             var successRate = (double)result.SuccessfulRecords / result.ProcessedRecords * 100;
-            System.Console.WriteLine($"   Success Rate: {successRate:F1}%");
+            _logger.LogInformation("Success Rate: {SuccessRate:F1}%", successRate);
         }
     }
 
     private void DisplayDownloadResult(LoadResult result)
     {
-        System.Console.WriteLine();
-        System.Console.WriteLine($"📊 Download Results:");
-        System.Console.WriteLine($"   Status: {(result.IsSuccess ? "✅ Success" : "❌ Failed")}");
-        System.Console.WriteLine($"   Duration: {result.Duration}");
+        _logger.LogInformation("Download Results - Status: {Status}", result.IsSuccess ? "Success" : "Failed");
+        _logger.LogInformation("Duration: {Duration}", result.Duration);
 
         if (!string.IsNullOrEmpty(result.Message))
         {
-            System.Console.WriteLine($"   Message: {result.Message}");
+            _logger.LogInformation("Message: {Message}", result.Message);
         }
 
         if (!string.IsNullOrEmpty(result.ErrorDetails))
         {
-            System.Console.WriteLine();
-            System.Console.WriteLine("❌ Error Details:");
-            System.Console.WriteLine($"   {result.ErrorDetails}");
+            _logger.LogError("Error Details: {ErrorDetails}", result.ErrorDetails);
         }
     }
 
-    private async Task DownloadTnoDataAsync(string destination, bool overwrite)
+    private async Task DownloadDataAsync(string destination, bool overwrite)
     {
         _logger.LogInformation("Starting TNO test data download");
         _logger.LogInformation("Destination: {Destination}", destination);
@@ -466,10 +549,9 @@ public class DataLoadApplication
 
         try
         {
-            System.Console.WriteLine($"📥 Downloading TNO test data to {destination}...");
-            System.Console.WriteLine();
+            _logger.LogInformation("Downloading TNO test data to {Destination}", destination);
 
-            var result = await _mediator.Send(new DownloadTnoDataCommand
+            var result = await _mediator.Send(new DownloadDataCommand
             {
                 DestinationPath = destination,
                 OverwriteExisting = overwrite
@@ -480,7 +562,6 @@ public class DataLoadApplication
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during TNO data download");
-            System.Console.WriteLine($"❌ Download operation failed: {ex.Message}");
         }
     }
 }

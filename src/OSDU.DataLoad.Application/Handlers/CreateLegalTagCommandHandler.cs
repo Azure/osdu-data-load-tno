@@ -11,12 +11,12 @@ namespace OSDU.DataLoad.Application.Handlers;
 /// </summary>
 public class CreateLegalTagCommandHandler : IRequestHandler<CreateLegalTagCommand, LoadResult>
 {
-    private readonly IOsduClient _osduClient;
+    private readonly IOsduService _osduService;
     private readonly ILogger<CreateLegalTagCommandHandler> _logger;
 
-    public CreateLegalTagCommandHandler(IOsduClient osduClient, ILogger<CreateLegalTagCommandHandler> logger)
+    public CreateLegalTagCommandHandler(IOsduService osduService, ILogger<CreateLegalTagCommandHandler> logger)
     {
-        _osduClient = osduClient ?? throw new ArgumentNullException(nameof(osduClient));
+        _osduService = osduService ?? throw new ArgumentNullException(nameof(osduService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -39,24 +39,9 @@ public class CreateLegalTagCommandHandler : IRequestHandler<CreateLegalTagComman
 
         try
         {
-            var success = await _osduClient.CreateLegalTagAsync(request.LegalTagName, cancellationToken);
+            var result = await _osduService.CreateLegalTagAsync(request.LegalTagName, cancellationToken);
             
-            var result = new LoadResult
-            {
-                IsSuccess = success,
-                Message = success ? "Legal tag created successfully" : "Failed to create legal tag",
-                Duration = DateTime.UtcNow - startTime
-            };
-
-            if (success)
-            {
-                _logger.LogInformation("Successfully created legal tag {LegalTagName}", request.LegalTagName);
-            }
-            else
-            {
-                _logger.LogError("Failed to create legal tag {LegalTagName}", request.LegalTagName);
-            }
-
+            _logger.LogInformation("Legal tag creation completed - Success: {IsSuccess}", result.IsSuccess);
             return result;
         }
         catch (Exception ex)

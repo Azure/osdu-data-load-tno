@@ -135,7 +135,7 @@ public class FileProcessor : IFileProcessor
                 {
                     using var stream = File.OpenRead(sourceFile.FilePath);
                     var buffer = new byte[1024];
-                    await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                    await stream.ReadExactlyAsync(buffer, 0, Math.Min(buffer.Length, (int)stream.Length), cancellationToken);
                 }
                 catch (UnauthorizedAccessException)
                 {

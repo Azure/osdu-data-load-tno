@@ -28,7 +28,7 @@ public interface IManifestGenerator
             string dataPartition,
             string aclViewer,
             string aclOwner,
-            string legalTag = null,
+            string legalTag = "",
             bool groupFile = false,
             CancellationToken cancellationToken = default);
 }

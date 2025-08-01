@@ -4,16 +4,16 @@ using OSDU.DataLoad.Domain.Entities;
 namespace OSDU.DataLoad.Application.Commands;
 
 /// <summary>
-/// Command to upload files to OSDU
+/// Command to upload files from configured dataset directories to OSDU
 /// </summary>
 public class UploadFilesCommand : IRequest<LoadResult>
 {
-    public IEnumerable<SourceFile> Files { get; init; } = Enumerable.Empty<SourceFile>();
+    public string BasePath { get; init; } = string.Empty;
     public string OutputPath { get; init; } = string.Empty;
 
-    public UploadFilesCommand(IEnumerable<SourceFile> files, string outputPath)
+    public UploadFilesCommand(string basePath, string outputPath)
     {
-        Files = files ?? throw new ArgumentNullException(nameof(files));
+        BasePath = basePath ?? throw new ArgumentNullException(nameof(basePath));
         OutputPath = outputPath ?? throw new ArgumentNullException(nameof(outputPath));
     }
 }
