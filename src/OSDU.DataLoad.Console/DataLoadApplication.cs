@@ -409,22 +409,22 @@ public class DataLoadApplication
             overallSuccess = overallSuccess && legalTagResult.IsSuccess;
 
             //// Step 2: Upload Dataset Files 
-            if (overallSuccess)
-            {
-                _logger.LogInformation("Step 2: Uploading dataset files from configured directories");
-                var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
-                DisplayStepResult("Dataset File Upload", uploadResult);
-                var uploadSuccess = uploadResult.IsSuccess;
-                overallSuccess = overallSuccess && uploadResult.IsSuccess;
-            }
-            else
-            {
-                _logger.LogError("Skipping data set upload due to legal tag creation failure");
-            }
+            //if (overallSuccess)
+            //{
+                //_logger.LogInformation("Step 2: Uploading dataset files from configured directories");
+                //var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
+                //DisplayStepResult("Dataset File Upload", uploadResult);
+                //var uploadSuccess = uploadResult.IsSuccess;
+                //overallSuccess = overallSuccess && uploadResult.IsSuccess;
+            //}
+            //else
+            //{
+            //    _logger.LogError("Skipping data set upload due to legal tag creation failure");
+            //}
 
-            //Step 3: Generate Manifests
-            if (overallSuccess)
-            {
+            ////Step 3: Generate Manifests
+            //if (overallSuccess)
+            //{
                 _logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
                 var manifestResult = await _mediator.Send(new GenerateManifestsCommand
                 {
@@ -437,15 +437,15 @@ public class DataLoadApplication
                 });
                 DisplayStepResult("Manifest Generation", manifestResult);
                 overallSuccess = overallSuccess && manifestResult.IsSuccess;
-            }
-            else
-            {
-                _logger.LogError("Skipping manifest generate due to data set upload failure");
-            }
+            //}
+            //else
+            //{
+            //    _logger.LogError("Skipping manifest generate due to data set upload failure");
+            //}
 
-            // Step 4: Submit Manifests to Workflow Service
-            if (overallSuccess)
-            {
+            //// Step 4: Submit Manifests to Workflow Service
+            //if (overallSuccess)
+            //{
                 _logger.LogInformation("Step 4: Submitting manifests to workflow service");
                 
                 // Use the manifests directory that contains both work product and non-work product manifests
@@ -458,11 +458,11 @@ public class DataLoadApplication
                 });
                 DisplayStepResult("Manifest Workflow Submission", workflowResult);
                 overallSuccess = overallSuccess && workflowResult.IsSuccess;
-             }
-             else
-             {
-                 _logger.LogError("Skipping workflow submission due to manifest generation failure");
-             }
+             //}
+             //else
+             //{
+             //    _logger.LogError("Skipping workflow submission due to manifest generation failure");
+             //}
             
             // Display overall results
             var totalDuration = DateTime.UtcNow - startTime;

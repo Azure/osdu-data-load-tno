@@ -1,0 +1,25 @@
+bin/
+obj/
+*.log
+*.tmp
+.vs/
+.vscode/
+*.user
+.git/
+README.md
+.gitignore
+Dockerfile*
+.dockerignore
+packages/
+**/packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+# directories
+**/bin/
+**/obj/
+**/out/
+
+# files
+Dockerfile*
+**/*.md

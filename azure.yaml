@@ -8,3 +8,6 @@ services:
         project: src/OSDU.DataLoad.Console
         host: containerapp
         language: dotnet
+        docker:
+            path: ../Dockerfile
+            context: ../
