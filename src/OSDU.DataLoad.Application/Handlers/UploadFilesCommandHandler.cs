@@ -4,7 +4,9 @@ using Microsoft.Extensions.Options;
 using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
 using OSDU.DataLoad.Domain.Interfaces;
+using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Threading;
 
 namespace OSDU.DataLoad.Application.Handlers;
 
@@ -118,8 +120,8 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
         var successfulUploads = 0;
         var failedUploads = 0;
         var processedFiles = 0;
-        var fileLocationMappings = new Dictionary<string, object>();
-        var failedFiles = new List<string>();
+        var fileLocationMappings = new ConcurrentDictionary<string, object>();
+        var failedFiles = new ConcurrentBag<string>();
 
         _logger.LogInformation("Starting upload for dataset directory: {DatasetDirectory}", datasetDirectory);
 
@@ -163,55 +165,64 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
 
             _logger.LogInformation("Found {FileCount} files in dataset directory: {DatasetDirectory}", files.Count, datasetDirectory);
 
-            // Process each file in the dataset directory
-            foreach (var file in files)
+
+            var options = new ParallelOptions
             {
-                processedFiles++;
-                var datasetProgress = (double)processedFiles / files.Count * 100;
-                
+                MaxDegreeOfParallelism = Environment.ProcessorCount * 4,
+                CancellationToken = cancellationToken
+            };
+
+            await Parallel.ForEachAsync(files, options, async (file, ct) =>
+            {
+                var current = Interlocked.Increment(ref processedFiles);
+                var progress = (double)current / files.Count * 100;
+
                 try
                 {
-                    _logger.LogInformation("Uploading [{Current}/{Total}] ({Progress:F1}%) - {DatasetDirectory}: {FileName}", 
-                        processedFiles, files.Count, datasetProgress, datasetDirectory, file.FileName);
-                    
-                    var uploadResult = await _osduService.UploadFileAsync(file, cancellationToken);
+                    var result = await _osduService.UploadFileAsync(file, ct);
 
-                    if (uploadResult.IsSuccess)
+                    if (result.IsSuccess)
                     {
-                        successfulUploads++;
-                        // Store file location mapping for this dataset
+                        Interlocked.Increment(ref successfulUploads);
                         fileLocationMappings[file.FileName] = new
                         {
-                            FileId = uploadResult.FileId,
-                            Version = uploadResult.FileRecordVersion,
+                            FileId = result.FileId,
+                            Version = result.FileRecordVersion,
                             OriginalPath = file.FilePath,
                             DatasetDirectory = datasetDirectory,
                             UploadedAt = DateTime.UtcNow
                         };
-                        _logger.LogInformation("✓ Successfully uploaded [{Current}/{Total}]: {FileName} -> {FileId}:{Version}", 
-                            processedFiles, files.Count, file.FileName, uploadResult.FileId, uploadResult.FileRecordVersion);
+
+                        _logger.LogInformation("✓ Progress Tracking - Dataset: [{DatasetDirectory}] - [{Current}/{Total}] ({Progress:F1}%) Uploaded: {FileName} -> {FileId}:{Version} | Success: {Success} | Failures: {Failures}",
+                            datasetDirectory, current, files.Count, progress, file.FileName, result.FileId, result.FileRecordVersion,
+                            successfulUploads, failedUploads);
                     }
                     else
                     {
-                        failedUploads++;
+                        Interlocked.Increment(ref failedUploads);
                         failedFiles.Add(file.FileName);
-                        _logger.LogError("✗ Failed to upload [{Current}/{Total}]: {FileName} - {Error}", 
-                            processedFiles, files.Count, file.FileName, uploadResult.Message);
+
+                        _logger.LogError("✗ Progress Tracking - Dataset: [{DatasetDirectory}] - [{Current}/{Total}] ({Progress:F1}%) Failed to upload: {FileName} - {Error} | Success: {Success} | Failures: {Failures}",
+                            datasetDirectory, current, files.Count, progress, file.FileName, result.Message,
+                            successfulUploads, failedUploads);
                     }
                 }
                 catch (Exception ex)
                 {
-                    failedUploads++;
+                    Interlocked.Increment(ref failedUploads);
                     failedFiles.Add(file.FileName);
-                    _logger.LogError(ex, "✗ Exception while uploading [{Current}/{Total}]: {FileName}", 
-                        processedFiles, files.Count, file.FileName);
+
+                    _logger.LogError(ex, "✗ Progress Tracking - [{Current}/{Total}] ({Progress:F1}%) Exception during upload: {FileName} | Success: {Success} | Failures: {Failures}",
+                        current, files.Count, progress, file.FileName,
+                        successfulUploads, failedUploads);
                 }
-            }
+            });
+
 
             // Save dataset-specific output file
             if (fileLocationMappings.Any())
             {
-                await SaveDatasetOutputFileAsync(datasetDirectory, fileLocationMappings, outputPath, cancellationToken);
+                await SaveDatasetOutputFileAsync(datasetDirectory, new Dictionary<string, object>(fileLocationMappings), outputPath, cancellationToken);
             }
 
             var duration = DateTime.UtcNow - datasetStartTime;
@@ -228,7 +239,7 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
                 SuccessfulUploads = successfulUploads,
                 FailedUploads = failedUploads,
                 Duration = duration,
-                FailedFiles = failedFiles
+                FailedFiles = failedFiles.ToList()
             };
         }
         catch (Exception ex)
@@ -244,7 +255,7 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
                 SuccessfulUploads = successfulUploads,
                 FailedUploads = int.MaxValue, // Unknown total, so mark as failed
                 Duration = duration,
-                FailedFiles = failedFiles
+                FailedFiles = failedFiles.ToList()
             };
         }
     }
