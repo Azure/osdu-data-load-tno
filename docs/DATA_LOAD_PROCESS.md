@@ -4,11 +4,11 @@ This document explains the complete data loading process for the OSDU Data Load 
 
 ## Process Overview
 
-The data loading process follows an orchestrated workflow that automatically loads all TNO data types in the correct dependency order:
+The data loading process follows an orchestrated workflow that automatically loads all TNO data types in the correct dependency order. The process consists of 6 main steps:
 
 ```mermaid
 graph TD
-    A[CLI Input] --> B["load --source &lt;path&gt;"]
+    A[CLI Input] --> B["load --source path"]
     
     B --> C[LoadAllDataCommand]
     C --> P[Prepare Stage]
@@ -40,8 +40,11 @@ graph TD
     E9 --> F
     
     F --> G[DiscoverFilesQuery]
-    G --> H[GenerateManifestCommand]
-    H --> I[LoadFromManifestCommand]
+    G --> H1{Has Files?}
+    H1 -->|Yes| H2[UploadFilesCommand]
+    H1 -->|No| H3[GenerateManifestsCommand]
+    H2 --> H3
+    H3 --> I[LoadFromManifestCommand]
     I --> J[TransformDataCommand]
     J --> K[UploadRecordsCommand]
     K --> L[Aggregate Results]
@@ -55,23 +58,53 @@ graph TD
     style J fill:#e8f5e8
 ```
 
-## Orchestrated Loading Order
+## Data Loading Steps Explained
 
-The solution automatically processes data in this order:
+### Step 1: Download TNO Dataset Files
+- Downloads official TNO test data from GitLab repository (~2.2GB)
+- Extracts and organizes files into expected directory structure
 
-### 0. **Prepare Stage** → Environment setup and prerequisites
-   - **User Authorization**: Adds configured user to `users.datalake.ops@{dataPartition}.dataservices.energy` group
-   - **Legal Tag Creation**: Creates the specified legal tag with standard compliance properties
-   
-### 1. **Reference Data** → Foundation data required by all other types
-2. **Misc Master Data** → Additional master data dependencies
-3. **Wells** → Well master data
-4. **Wellbores** → Wellbore master data (depends on wells)
-5. **Documents** → Document files
-6. **Well Logs** → Well log files
-7. **Well Markers** → Marker data files
-8. **Wellbore Trajectories** → Trajectory data files
-9. **Work Products** → Final work product data
+### Step 2: Create Legal Tag
+- Establishes required legal compliance tags for data governance
+- Sets up legal framework required by OSDU platform
+- **Handler**: `CreateLegalTagCommandHandler`
+
+### Step 3: Upload Files to OSDU (4-step process)
+- **Step 3a**: Request file upload URL from File API
+- **Step 3b**: Upload file content to storage location
+- **Step 3c**: Submit metadata to File Service
+- **Step 3d**: Maintain registry of uploaded files with IDs and versions
+- **Handler**: `UploadFilesCommandHandler`
+
+### Step 4: Generate Non-Work Product Manifests
+- Uses CSV templates to generate individual manifests for each data row
+- Processes reference data, wells, wellbores, and related entities
+- **Handler**: `GenerateManifestsCommandHandler`
+
+### Step 5: Generate Work Product Manifests
+- Iterates through uploaded files registry
+- Retrieves JSON metadata from work product folders
+- Updates manifests with legal tags, ACL permissions, and data partition IDs
+- **Handler**: `GenerateWorkProductManifestCommandHandler`
+
+### Step 6: Upload Manifests
+- Submits all manifests to OSDU in correct dependency order:
+  1. Reference Data (foundation lookup data)
+  2. Misc Master Data (additional dependencies)
+  3. Wells (well master data)
+  4. Wellbores (depends on wells)
+  5. Documents (document files)
+  6. Well Logs (log files and data)
+  7. Well Markers (geological markers)
+  8. Wellbore Trajectories (directional surveys)
+  9. Work Products (final metadata referencing uploaded files)
+- Processes data types sequentially to maintain referential integrity
+- **Handler**: `LoadFromManifestCommandHandler` → `UploadRecordsCommandHandler`
+    style P fill:#fff3e0
+    style P2 fill:#e8f5e8
+    style P4 fill:#e8f5e8
+    style F fill:#ffebee
+    style J fill:#e8f5e8
 
 ## Detailed Process Flow
 
@@ -127,23 +160,6 @@ sequenceDiagram
 
 The prepare stage ensures that the OSDU environment is properly configured before data loading begins. This stage includes user authorization setup and legal tag creation.
 
-### User Authorization Setup
-
-When `OSDU_USER_EMAIL` is configured, the application will:
-
-1. **Check User Authorization**: Adds the specified user to the data partition operations group
-2. **Group Pattern**: Uses the format `users.datalake.ops@{dataPartition}.dataservices.energy`
-3. **Conflict Handling**: Gracefully handles 409 responses when user is already in the group
-4. **Error Logging**: Provides detailed logging for authorization operations
-
-**Configuration Example:**
-```bash
-export OSDU_USER_EMAIL="john.doe@example.com"
-export OSDU_DATA_PARTITION="opendes"
-```
-
-This will add `john.doe@example.com` to the group `users.datalake.ops@opendes.dataservices.energy`.
-
 ### Legal Tag Creation
 
 When `OSDU_LEGAL_TAG` is configured, the application will:
@@ -163,74 +179,6 @@ When `OSDU_LEGAL_TAG` is configured, the application will:
 **Configuration Example:**
 ```bash
 export OSDU_LEGAL_TAG="tno-geological-data-public"
-```
-
-### Error Handling
-
-The prepare stage implements robust error handling:
-
-- **409 Conflicts**: Treated as success conditions (resource already exists)
-- **API Failures**: Logged with detailed error information
-- **Continuation**: Data loading continues even if prepare stage encounters non-critical errors
-- **Validation**: Validates OSDU configuration before attempting operations
-
-### 1. File Discovery Phase
-```mermaid
-sequenceDiagram
-    participant CLI as CLI Application
-    participant DFQ as DiscoverFilesQuery
-    participant FP as FileProcessor
-    participant FS as File System
-
-    CLI->>DFQ: DirectoryPath + DataType
-    DFQ->>FP: Discover files by type
-    FP->>FS: Scan directory structure
-    FS-->>FP: File list
-    FP->>FP: Filter by extensions
-    FP->>FP: Create SourceFile entities
-    FP-->>DFQ: SourceFile[]
-    DFQ-->>CLI: Discovered files
-```
-
-### 2. Data Transformation Phase
-```mermaid
-sequenceDiagram
-    participant Handler as LoadFromManifestHandler
-    participant UploadFiles as UploadFilesCommandHandler
-    participant Transform as TransformDataCommandHandler
-    participant UploadRecords as UploadRecordsCommandHandler
-    participant DT as DataTransformer
-    participant Schema as Schema Service
-    participant OSDU as OSDU APIs
-
-    Handler->>Handler: Check RequiresFileUpload flag
-    
-    alt RequiresFileUpload = true
-        Handler->>UploadFiles: UploadFilesCommand
-        UploadFiles->>OSDU: File upload workflow
-        OSDU-->>UploadFiles: File upload results
-        UploadFiles-->>Handler: Upload complete
-    end
-    
-    Handler->>Transform: TransformDataCommand
-    Transform->>DT: Transform request (SourceFile + DataType)
-    DT->>DT: Parse file format (CSV/JSON/Excel)
-    DT->>DT: Map TNO fields to OSDU schema
-    DT->>DT: Generate OSDU record structure
-    
-    opt Schema validation enabled
-        DT->>Schema: GET /schema/{kind}
-        Schema-->>DT: Schema definition
-        DT->>DT: Validate against schema
-    end
-    
-    DT-->>Transform: DataRecord[]
-    Transform-->>Handler: Transformed records
-    
-    Handler->>UploadRecords: UploadRecordsCommand
-    UploadRecords->>OSDU: Batch upload (≤500 records)
-    OSDU-->>UploadRecords: Upload results
-    UploadRecords-->>Handler: Final results
 ```
 
 ### 3. Upload Phase
@@ -272,35 +220,6 @@ sequenceDiagram
     Client-->>Handler: LoadResult + FileResults
 ```
 
-### 4. Intelligent Batching
-```mermaid
-sequenceDiagram
-    participant Handler as UploadRecordsHandler
-    participant Client as OsduHttpClient
-    participant Storage as Storage API (/api/storage/v2)
-
-    Handler->>Client: Upload 929 records
-    Note over Client: Split into batches (max 500 per batch)
-    
-    loop For each batch
-        Client->>Client: Create batch (≤500 records)
-        Client->>Storage: PUT /records
-        Note right of Storage: OSDU limit: max 500 records
-        Storage->>Storage: Validate + store batch
-        Storage-->>Client: Batch result
-    end
-    
-    Note over Client: Example with 929 records:
-    Client->>Storage: PUT /records (Batch 1: 500 records)
-    Storage-->>Client: Success: 500 uploaded
-    
-    Client->>Storage: PUT /records (Batch 2: 429 records)
-    Storage-->>Client: Success: 429 uploaded
-    
-    Client->>Client: Aggregate all batch results
-    Client-->>Handler: Final Result: 929 total uploaded
-```
-
 ## File Upload Process
 
 The C# implementation includes a complete **4-step file upload workflow** that matches the Python `load_single_file()` function:
@@ -309,51 +228,3 @@ The C# implementation includes a complete **4-step file upload workflow** that m
 2. **Upload to Blob**: Upload file to Azure Blob Storage using signed URL
 3. **Post Metadata**: Submit file metadata to OSDU (`/files/metadata`)
 4. **Get Version**: Retrieve record version from Storage API (`/records/{fileId}/versions`)
-
-This ensures **complete integration** with OSDU platform file management and work product relationships.
-
-## Data Types and Processing
-
-| Data Type | Description | File Formats | Upload Method |
-|-----------|-------------|--------------|---------------|
-| `Wells` | Well master data | CSV, JSON, Excel | Records API |
-| `Wellbores` | Wellbore information | CSV, JSON, Excel | Records API |
-| `WellboreTrajectories` | Directional survey data | CSV, JSON | Records + Files API |
-| `WellMarkers` | Geological markers | CSV, JSON | Records + Files API |
-| `WellboreMarkers` | Wellbore-specific markers | CSV, JSON | Records + Files API |
-| `WellLogs` | Log curve data | LAS, DLIS, CSV | Files API (4-step workflow) |
-| `Documents` | Document files | PDF, DOC, XLS, etc. | Files API (4-step workflow) |
-| `ReferenceData` | Lookup tables | CSV, JSON | Records API |
-| `Horizons` | Geological horizons | CSV, JSON | Records API |
-| `Formations` | Formation tops | CSV, JSON | Records API |
-| `WellCompletions` | Completion data | CSV, JSON | Records API |
-| `WorkProducts` | Work product metadata | JSON manifests | Records API with file references |
-
-## Expected Directory Structure
-
-The application expects the following directory structure (matches the Python solution's open-test-data format):
-
-```
-C:\data\tno\
-├── datasets/                        # File data (Phase 3)
-│   ├── documents/                   # Document files
-│   ├── markers/                     # Marker data files  
-│   ├── trajectories/                # Trajectory data files
-│   └── well-logs/                   # Well log files
-├── manifests/                       # Generated manifest directories (Phases 1-2)
-│   ├── reference-manifests/         # Reference data manifests
-│   ├── misc-master-data-manifests/  # Misc master data manifests
-│   ├── master-well-data-manifests/  # Well master data manifests
-│   └── master-wellbore-data-manifests/ # Wellbore master data manifests
-├── TNO/                            # TNO-specific data
-│   ├── contrib/                     # TNO contributed data
-│   └── provided/
-│       └── TNO/
-│           └── work-products/       # Work product data (Phase 4)
-│               ├── markers/
-│               ├── trajectories/
-│               ├── well\ logs/      # Note: contains space
-│               └── documents/
-├── schema/                          # OSDU schema files
-└── templates/                       # Data templates
-```

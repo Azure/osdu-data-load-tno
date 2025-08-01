@@ -1,19 +1,41 @@
 # OSDU Data Load TNO - C# Implementation
 
-A modern C# application for loading TNO (Netherlands Organisation for Applied Scientific Research) data into the OSDU platform. This tool provides **100% functional equivalency** with the original Python solution while offering improved performance, reliability, and maintainability.
+A modern C# application for loading TNO (Netherlands Organisation for Applied Scientific Research) data into the OSDU platform. This tool provides complete functional equivalency with the original Python solution while offering improved performance, reliability, and maintainability.
 
-## ✨ Key Features
+## Key Features
 
-- 🚀 **Simple CLI Interface** - Three intuitive commands to get you started
-- 🔄 **Automatic Processing** - Handles all TNO data types in the correct dependency order
-- 📁 **File Upload Support** - Complete 4-step OSDU file upload workflow
-- 🔧 **Smart Batching** - Automatically splits large datasets to meet OSDU limits
-- 🔐 **Secure Authentication** - Uses Azure Identity for passwordless authentication
-- 📊 **Progress Tracking** - Real-time progress updates and detailed logging
-- 🛡️ **Error Resilience** - Comprehensive retry policies and error handling
-- 🏗️ **Clean Architecture**: CQRS pattern with proper separation of concerns
+- **Simple CLI Interface** - Three intuitive commands to get you started
+- **Automatic Processing** - Handles all TNO data types in the correct dependency order
+- **File Upload Support** - Complete 4-step OSDU file upload workflow
+- **Smart Batching** - Automatically splits large datasets to meet OSDU limits
+- **Secure Authentication** - Uses Azure Identity for passwordless authentication
+- **Progress Tracking** - Real-time progress updates and detailed logging
+- **Error Resilience** - Comprehensive retry policies and error handling
+- **Clean Architecture** - CQRS pattern with proper separation of concerns
 
-## 🚀 Quick Start
+## Data Loading Process Overview
+
+The application follows a comprehensive 6-step process to load TNO data into OSDU:
+
+1. **Downloads TNO Dataset Files** - Retrieves official TNO test data from GitLab repository
+2. **Creates Legal Tag** - Establishes required legal compliance tags for data governance
+3. **Uploads Files to OSDU** - Executes 4-step file upload workflow:
+   - Requests file upload URL from File API
+   - Uploads file content to storage
+   - Submits metadata to File Service
+   - Maintains registry of uploaded files with IDs and versions
+4. **Generates Non-Work Product Manifests** - Creates manifests for master data:
+   - Uses CSV templates to generate individual manifests for each data row
+   - Processes reference data, wells, wellbores, and related entities
+5. **Generates Work Product Manifests** - Creates work product metadata:
+   - Iterates through uploaded files registry
+   - Retrieves JSON metadata from work product folders
+   - Updates manifests with legal tags, ACL permissions, and data partition IDs
+6. **Uploads Manifests** - Submits all manifests to OSDU in correct dependency order
+
+For detailed information about each step, see [Data Load Process Documentation](docs/DATA_LOAD_PROCESS.md).
+
+## Quick Start
 
 ### 1. Prerequisites
 
@@ -21,7 +43,7 @@ Before you begin, ensure you have:
 
 - **.NET 9.0** or later installed
 - **Azure CLI** for authentication: `az login --tenant your-tenant-id`
-- [**Azure Developer CLI (azd)** for deployments](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd).
+- [**Azure Developer CLI (azd)** for deployments](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
 - **OSDU Platform Access** with `users.datalake.ops` role
 - **Visual Studio** or **VS Code** (optional, for development)
 
@@ -60,7 +82,7 @@ dotnet run -- help
 dotnet run -- download-tno --destination "~/osdu-data/tno"
 dotnet run -- load --source "~/osdu-data/tno"
 ```
-## 📋 Available Commands
+## Available Commands
 
 ### Default Behavior (No Arguments)
 ```bash
@@ -102,7 +124,7 @@ dotnet run -- load --source "~/osdu-data/tno"
 The application automatically processes all data types in the correct order:
 1. Reference Data → Misc Master Data → Wells → Wellbores → Documents → Well Logs → Well Markers → Wellbore Trajectories → Work Products
 
-## 📊 What Gets Loaded
+## What Gets Loaded
 
 | Data Type | Description | File Formats | Processing Method |
 |-----------|-------------|--------------|-------------------|
@@ -114,14 +136,14 @@ The application automatically processes all data types in the correct order:
 | Reference Data | Lookup tables | CSV, JSON | Records API |
 | *...and more* | See [Data Load Process](docs/DATA_LOAD_PROCESS.md) for complete list | | |
 
-## 💡 Expected Directory Structure
+## Expected Directory Structure
 
 The application expects the following directory structure (automatically created by `dotnet run download-tno`):
 
-> **📁 Cross-Platform Default**: `~/osdu-data/tno/` resolves to:
-> - **Windows**: `C:\Users\{username}\osdu-data\tno`
-> - **Linux**: `/home/{username}/osdu-data/tno`  
-> - **macOS**: `/Users/{username}/osdu-data/tno`
+**Cross-Platform Default**: `~/osdu-data/tno/` resolves to:
+- **Windows**: `C:\Users\{username}\osdu-data\tno`
+- **Linux**: `/home/{username}/osdu-data/tno`  
+- **macOS**: `/Users/{username}/osdu-data/tno`
 
 ```
 ~/osdu-data/tno/                     # Default location (cross-platform)
@@ -148,7 +170,7 @@ The application expects the following directory structure (automatically created
 └── templates/                       # Data templates
 ```
 
-## ☁️ Azure Deployments
+## Azure Deployments
 
 ### Configure Environment
 
@@ -189,18 +211,16 @@ Get the object ID of the managed identity and assign it `users.datalake.ops` on 
   azd deploy
   ```
 
-## 📚 Additional Resources
+## Additional Resources
 
 For detailed information on specific topics, see our documentation:
 
 - **[Data Loading Process](docs/DATA_LOAD_PROCESS.md)** - Detailed workflow and processing order
-- **[Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md)** - CQRS pattern, Clean Architecture, and project structure  
 - **[Configuration Guide](docs/CONFIGURATION.md)** - Advanced configuration options and environment variables
-- **[Python Comparison](docs/PYTHON_COMPARISON.md)** - How this C# version matches the original Python implementation
 
 ---
 
-## 🛠️ Common Issues and Solutions
+## Common Issues and Solutions
 
 ### 1. Authentication Failures
 **Symptoms**: HTTP 401 errors, "Failed to authenticate" messages
@@ -217,16 +237,8 @@ For detailed information on specific topics, see our documentation:
 **Symptoms**: Slow upload speeds, timeouts
 
 **Solutions**:
-- **Batch Size**: Consider reducing batch size (default 500 is optimal)
-- **Timeout**: Increase RequestTimeoutMs for large files
-- **Network**: Check network connectivity and bandwidth to OSDU platform
-- **File Size**: Split large files into smaller chunks
+- **Run upload in Azure**: See [Azure Deployments](#azure-deployments)
 
-**Solutions**:
-- **Batch Size**: Consider reducing batch size (default 500 is optimal)
-- **Timeout**: Increase RequestTimeoutMs for large files
-- **Network**: Check network connectivity and bandwidth to OSDU platform
-- **File Size**: Split large files into smaller chunks
 
 ### 3. File Upload - Metadata Issues
 **Symptoms**: The file is uploaded and metadata is created, but /v2/records/{id} returns 404
@@ -276,14 +288,14 @@ fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
 
 ## Contributing
 
-This solution follows Clean Architecture and CQRS principles. See our [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) guide for detailed information on:
+This solution follows Clean Architecture and CQRS principles. For detailed information on contributing:
 
-- Adding new features
-- Code standards and patterns
-- Testing guidelines
-- Project structure
+- Review the existing code patterns and structure
+- Follow established naming conventions
+- Add appropriate unit tests for new features
+- Update documentation as needed
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
