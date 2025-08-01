@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
 using OSDU.DataLoad.Domain.Interfaces;
@@ -15,13 +16,16 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
 {
     private readonly IOsduService _osduService;
     private readonly ILogger<SubmitManifestsToWorkflowServiceCommandHandler> _logger;
+    private readonly OsduConfiguration _configuration;
 
     public SubmitManifestsToWorkflowServiceCommandHandler(
         IOsduService osduService,
-        ILogger<SubmitManifestsToWorkflowServiceCommandHandler> logger)
+        ILogger<SubmitManifestsToWorkflowServiceCommandHandler> logger,
+        IOptions<OsduConfiguration> configuration)
     {
         _osduService = osduService ?? throw new ArgumentNullException(nameof(osduService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configuration = configuration?.Value ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public async Task<LoadResult> Handle(SubmitManifestsToWorkflowServiceCommand request, CancellationToken cancellationToken)
@@ -31,7 +35,6 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
 
         try
         {
-
             if (string.IsNullOrWhiteSpace(request.DataPartition))
             {
                 return new LoadResult
@@ -44,11 +47,11 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
 
             // Use the predefined loading sequence and directory mapping from DataLoadingOrder
             _logger.LogInformation("Using predefined DataLoadingOrder for manifest submission");
-            
+
             // First pass: count total manifests for progress tracking
             var totalManifestCount = 0;
             var dataTypeManifestCounts = new Dictionary<TnoDataType, int>();
-            
+
             foreach (var dataType in DataLoadingOrder.LoadingSequence)
             {
                 if (DataLoadingOrder.ManifestDirectories.TryGetValue(dataType, out var relativePath))
@@ -66,10 +69,10 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     }
                 }
             }
-            
-            _logger.LogInformation("Found {TotalManifestCount} total manifest files to process across {DataTypeCount} data types", 
+
+            _logger.LogInformation("Found {TotalManifestCount} total manifest files to process across {DataTypeCount} data types",
                 totalManifestCount, DataLoadingOrder.LoadingSequence.Length);
-            
+
             if (totalManifestCount == 0)
             {
                 return new LoadResult
@@ -79,7 +82,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     Duration = DateTime.UtcNow - startTime
                 };
             }
-            
+
             var totalProcessed = 0;
             var totalSuccessful = 0;
             var totalFailed = 0;
@@ -90,8 +93,8 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
             {
                 var sequenceIndex = Array.IndexOf(DataLoadingOrder.LoadingSequence, dataType);
                 var manifestCountForType = dataTypeManifestCounts[dataType];
-                
-                _logger.LogInformation("Processing data type: {DataType} (LoadingSequence: {LoadingSequence}) - {ManifestCount} manifests", 
+
+                _logger.LogInformation("Processing data type: {DataType} (LoadingSequence: {LoadingSequence}) - {ManifestCount} manifests",
                     dataType, sequenceIndex + 1, manifestCountForType);
 
                 // Get the directory path for this data type
@@ -103,7 +106,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
 
                 // Build the full directory path
                 var directoryPath = Path.Combine(request.SourceDataPath, relativePath);
-                
+
                 // Check if directory exists
                 if (!Directory.Exists(directoryPath))
                 {
@@ -113,7 +116,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
 
                 // Get all manifest files in this directory
                 var manifestFiles = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories);
-                
+
                 if (manifestFiles.Length == 0)
                 {
                     _logger.LogInformation("No manifest files found for {DataType} in directory: {DirectoryPath}", dataType, directoryPath);
@@ -124,71 +127,57 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 var successfulInType = 0;
                 var failedInType = 0;
 
-                // Process all manifests for this data type
-                foreach (var manifestFile in manifestFiles)
+                // Check if this data type needs batching
+                var needsBatching = dataType == TnoDataType.MiscMasterData ||
+                                   dataType == TnoDataType.Wells ||
+                                   dataType == TnoDataType.Wellbores;
+
+                if (needsBatching)
                 {
-                    totalProcessed++;
-                    processedInType++;
-                    var fileName = Path.GetFileName(manifestFile);
-                    
-                    // Calculate overall progress percentage
-                    var progressPercentage = (double)totalProcessed / totalManifestCount * 100;
-                    
-                    try
+                    var result = await ProcessBatchedManifestsAsync(
+                        dataType,
+                        manifestFiles,
+                        sequenceIndex,
+                        request.DataPartition,
+                        cancellationToken);
+
+                    totalProcessed += result.ProcessedRecords;
+                    totalSuccessful += result.SuccessfulRecords;
+                    totalFailed += result.FailedRecords;
+                    processedInType = result.ProcessedRecords;
+                    successfulInType = result.SuccessfulRecords;
+                    failedInType = result.FailedRecords;
+
+                    if (result.FailedManifests.Any())
                     {
-                        _logger.LogInformation("Processing manifest [{Current}/{Total}] ({Progress:F1}%): {FileName} for {DataType} (LoadingSequence: {LoadingSequence})", 
-                            totalProcessed, totalManifestCount, progressPercentage, fileName, dataType, sequenceIndex + 1);
-                        
-                        // Read and parse the manifest file
-                        var manifestContent = await File.ReadAllTextAsync(manifestFile, cancellationToken);
-                        var manifest = JsonSerializer.Deserialize<Dictionary<string, object>>(manifestContent);
-                        manifest["kind"] = "osdu:wks:Manifest:1.0.0";
-
-                        // Build the ingest request with the manifest content
-                        var ingestRequest = new
-                        {
-                            executionContext = new
-                            {
-                                Payload = new Dictionary<string, object>
-                                {
-                                    ["AppKey"] = "test-app",
-                                    ["data-partition-id"] = request.DataPartition
-                                },
-                                manifest
-                            }
-                        };
-
-                        // Submit this individual manifest to the workflow service
-                        var result = await _osduService.SubmitWorkflowAsync(ingestRequest, cancellationToken);
-
-                        if (result.IsSuccess)
-                        {
-                            totalSuccessful++;
-                            successfulInType++;
-                            _logger.LogInformation("✓ Successfully submitted manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}", 
-                                totalProcessed, totalManifestCount, progressPercentage, fileName);
-                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
-                        }
-                        else
-                        {
-                            totalFailed++;
-                            failedInType++;
-                            failedManifests.Add($"{dataType}/{fileName} (seq:{sequenceIndex + 1})");
-                            _logger.LogError("✗ Failed to submit manifest [{Current}/{Total}] ({Progress:F1}%): {FileName} - {Error}", 
-                                totalProcessed, totalManifestCount, progressPercentage, fileName, result.ErrorDetails);
-                        }
+                        failedManifests.AddRange(result.FailedManifests);
                     }
-                    catch (Exception ex)
+                }
+                else
+                {
+                    var result = await ProcessIndividualManifestsAsync(
+                        dataType,
+                        manifestFiles,
+                        sequenceIndex,
+                        request.DataPartition,
+                        totalProcessed,
+                        totalManifestCount,
+                        cancellationToken);
+
+                    totalProcessed += result.ProcessedRecords;
+                    totalSuccessful += result.SuccessfulRecords;
+                    totalFailed += result.FailedRecords;
+                    processedInType = result.ProcessedRecords;
+                    successfulInType = result.SuccessfulRecords;
+                    failedInType = result.FailedRecords;
+
+                    if (result.FailedManifests.Any())
                     {
-                        totalFailed++;
-                        failedInType++;
-                        failedManifests.Add($"{dataType}/{fileName} (seq:{sequenceIndex + 1})");
-                        _logger.LogError(ex, "✗ Error processing manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}", 
-                            totalProcessed, totalManifestCount, progressPercentage, fileName);
+                        failedManifests.AddRange(result.FailedManifests);
                     }
                 }
 
-                _logger.LogInformation("Completed data type: {DataType} - Processed: {Processed}, Successful: {Successful}, Failed: {Failed} | Overall Progress: [{TotalProcessed}/{TotalManifests}] ({OverallProgress:F1}%)", 
+                _logger.LogInformation("Completed data type: {DataType} - Processed: {Processed}, Successful: {Successful}, Failed: {Failed} | Overall Progress: [{TotalProcessed}/{TotalManifests}] ({OverallProgress:F1}%)",
                     dataType, processedInType, successfulInType, failedInType, totalProcessed, totalManifestCount, (double)totalProcessed / totalManifestCount * 100);
             }
 
@@ -205,10 +194,10 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 SuccessfulRecords = totalSuccessful,
                 FailedRecords = totalFailed,
                 Duration = duration,
-                Message = overallSuccess 
+                Message = overallSuccess
                     ? $"Successfully submitted all {totalSuccessful} manifest files to workflow service"
                     : $"Submitted {totalSuccessful} of {totalProcessed} manifest files. Failed: {string.Join(", ", failedManifests)}",
-                ErrorDetails = failedManifests.Any() 
+                ErrorDetails = failedManifests.Any()
                     ? $"Failed manifests: {string.Join(", ", failedManifests)}"
                     : string.Empty
             };
@@ -229,6 +218,211 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 ErrorDetails = ex.Message
             };
         }
+    }
+
+    private async Task<ProcessingResult> ProcessBatchedManifestsAsync(
+        TnoDataType dataType,
+        string[] manifestFiles,
+        int sequenceIndex,
+        string dataPartition,
+        CancellationToken cancellationToken)
+    {
+        var batchSize = _configuration.MasterDataManifestSubmissionBatchSize;
+
+        // Collect all MasterData records from all manifest files
+        var allMasterDataRecords = new List<object>();
+        var allProcessedFiles = new List<string>();
+        _logger.LogInformation("Preparing batch request...this may take a few min");
+        foreach (var manifestFile in manifestFiles)
+        {
+            var fileName = Path.GetFileName(manifestFile);
+            allProcessedFiles.Add(fileName);
+
+            try
+            {
+                // Read and parse the manifest file
+                var manifestContent = await File.ReadAllTextAsync(manifestFile, cancellationToken);
+                var manifest = JsonSerializer.Deserialize<JsonElement>(manifestContent);
+
+                if (manifest.TryGetProperty("MasterData", out var masterDataProperty) &&
+                    masterDataProperty.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var record in masterDataProperty.EnumerateArray())
+                    {
+                        allMasterDataRecords.Add(JsonSerializer.Deserialize<object>(record));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading manifest file for batching: {FileName}", fileName);
+            }
+        }
+
+        _logger.LogInformation("Collected {TotalRecords} MasterData records from {FileCount} manifest files for {DataType} (batch size: {BatchSize})",
+            allMasterDataRecords.Count, manifestFiles.Length, dataType, batchSize);
+
+        // Process records in configured batches
+        var batches = allMasterDataRecords.Chunk(batchSize);
+        var batchNumber = 0;
+        var processedRecords = 0;
+        var successfulRecords = 0;
+        var failedRecords = 0;
+        var failedManifests = new List<string>();
+
+        foreach (var batch in batches)
+        {
+            batchNumber++;
+            var recordsInBatch = batch.Length;
+
+            try
+            {
+                _logger.LogInformation("Processing batch {BatchNumber} for {DataType}: {RecordsInBatch} records (LoadingSequence: {LoadingSequence})",
+                    batchNumber, dataType, recordsInBatch, sequenceIndex + 1);
+
+                // Create batched manifest
+                var batchedManifest = new Dictionary<string, object>
+                {
+                    ["kind"] = "osdu:wks:Manifest:1.0.0",
+                    ["MasterData"] = batch.ToArray()
+                };
+
+                // Build the ingest request with the batched manifest content
+                var ingestRequest = new
+                {
+                    executionContext = new
+                    {
+                        Payload = new Dictionary<string, object>
+                        {
+                            ["AppKey"] = "test-app",
+                            ["data-partition-id"] = dataPartition
+                        },
+                        manifest = batchedManifest
+                    }
+                };
+
+                // Submit this batch to the workflow service
+                var result = await _osduService.SubmitWorkflowAsync(ingestRequest, cancellationToken);
+
+                if (result.IsSuccess)
+                {
+                    successfulRecords += recordsInBatch;
+                    _logger.LogInformation("✓ Successfully submitted batch {BatchNumber} for {DataType}: {RecordsInBatch} records",
+                        batchNumber, dataType, recordsInBatch);
+                    await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+                }
+                else
+                {
+                    failedRecords += recordsInBatch;
+                    failedManifests.Add($"{dataType}/batch-{batchNumber} ({recordsInBatch} records) (seq:{sequenceIndex + 1})");
+                    _logger.LogError("✗ Failed to submit batch {BatchNumber} for {DataType}: {RecordsInBatch} records - {Error}",
+                        batchNumber, dataType, recordsInBatch, result.ErrorDetails);
+                }
+
+                processedRecords += recordsInBatch;
+            }
+            catch (Exception ex)
+            {
+                failedRecords += recordsInBatch;
+                failedManifests.Add($"{dataType}/batch-{batchNumber} ({recordsInBatch} records) (seq:{sequenceIndex + 1})");
+                _logger.LogError(ex, "✗ Error processing batch {BatchNumber} for {DataType}: {RecordsInBatch} records",
+                    batchNumber, dataType, recordsInBatch);
+                processedRecords += recordsInBatch;
+            }
+        }
+
+        _logger.LogInformation("Completed batching for {DataType}: {FileCount} files containing {TotalRecords} records processed in {BatchCount} batches",
+            dataType, allProcessedFiles.Count, allMasterDataRecords.Count, batchNumber);
+
+        return new ProcessingResult
+        {
+            ProcessedRecords = processedRecords,
+            SuccessfulRecords = successfulRecords,
+            FailedRecords = failedRecords,
+            FailedManifests = failedManifests
+        };
+    }
+
+    private async Task<ProcessingResult> ProcessIndividualManifestsAsync(
+        TnoDataType dataType,
+        string[] manifestFiles,
+        int sequenceIndex,
+        string dataPartition,
+        int currentTotalProcessed,
+        int totalManifestCount,
+        CancellationToken cancellationToken)
+    {
+        var processedRecords = 0;
+        var successfulRecords = 0;
+        var failedRecords = 0;
+        var failedManifests = new List<string>();
+
+        foreach (var manifestFile in manifestFiles)
+        {
+            processedRecords++;
+            var fileName = Path.GetFileName(manifestFile);
+
+            // Calculate overall progress percentage
+            var progressPercentage = (double)(currentTotalProcessed + processedRecords) / totalManifestCount * 100;
+
+            try
+            {
+                _logger.LogInformation("Processing manifest [{Current}/{Total}] ({Progress:F1}%): {FileName} for {DataType} (LoadingSequence: {LoadingSequence})",
+                    currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName, dataType, sequenceIndex + 1);
+
+                // Read and parse the manifest file
+                var manifestContent = await File.ReadAllTextAsync(manifestFile, cancellationToken);
+                var manifest = JsonSerializer.Deserialize<Dictionary<string, object>>(manifestContent);
+                manifest["kind"] = "osdu:wks:Manifest:1.0.0";
+
+                // Build the ingest request with the manifest content
+                var ingestRequest = new
+                {
+                    executionContext = new
+                    {
+                        Payload = new Dictionary<string, object>
+                        {
+                            ["AppKey"] = "test-app",
+                            ["data-partition-id"] = dataPartition
+                        },
+                        manifest
+                    }
+                };
+
+                // Submit this individual manifest to the workflow service
+                var result = await _osduService.SubmitWorkflowAsync(ingestRequest, cancellationToken);
+
+                if (result.IsSuccess)
+                {
+                    successfulRecords++;
+                    _logger.LogInformation("✓ Successfully submitted manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}",
+                        currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName);
+                    await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+                }
+                else
+                {
+                    failedRecords++;
+                    failedManifests.Add($"{dataType}/{fileName} (seq:{sequenceIndex + 1})");
+                    _logger.LogError("✗ Failed to submit manifest [{Current}/{Total}] ({Progress:F1}%): {FileName} - {Error}",
+                        currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName, result.ErrorDetails);
+                }
+            }
+            catch (Exception ex)
+            {
+                failedRecords++;
+                failedManifests.Add($"{dataType}/{fileName} (seq:{sequenceIndex + 1})");
+                _logger.LogError(ex, "✗ Error processing manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}",
+                    currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName);
+            }
+        }
+
+        return new ProcessingResult
+        {
+            ProcessedRecords = processedRecords,
+            SuccessfulRecords = successfulRecords,
+            FailedRecords = failedRecords,
+            FailedManifests = failedManifests
+        };
     }
 
     private async Task CheckWorkflowStatusAsync(object request, string runId, CancellationToken cancellationToken)
@@ -279,6 +473,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     {
                         _logger.LogWarning("Workflow {RunId} in unexpected non-running state: {Status}", runId, status.Status);
                     }
+                    return;
                 }
             }
             catch (Exception ex)
@@ -287,5 +482,13 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     runId, attempt + 1, maxAttempts);
             }
         }
+    }
+
+    private class ProcessingResult
+    {
+        public int ProcessedRecords { get; init; }
+        public int SuccessfulRecords { get; init; }
+        public int FailedRecords { get; init; }
+        public List<string> FailedManifests { get; init; } = new();
     }
 }
