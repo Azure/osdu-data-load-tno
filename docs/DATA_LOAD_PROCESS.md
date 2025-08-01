@@ -6,60 +6,6 @@ This document explains the complete data loading process for the OSDU Data Load 
 
 The data loading process follows an orchestrated workflow that automatically loads all TNO data types in the correct dependency order. The process consists of 6 main steps:
 
-```mermaid
-graph TD
-    A[CLI Input] --> B["load --source path"]
-    
-    B --> C[LoadAllDataCommand]
-    C --> P[Prepare Stage]
-    P --> P1{UserEmail Configured?}
-    P1 -->|Yes| P2[AddUserToOpsGroup]
-    P1 -->|No| P3[Skip User Setup]
-    P2 --> P4[CreateLegalTag]
-    P3 --> P4
-    P4 --> D{For Each Data Type in Order}
-    
-    D --> E1[Reference Data]
-    E1 --> E2[Misc Master Data]
-    E2 --> E3[Wells]
-    E3 --> E4[Wellbores]
-    E4 --> E5[Documents]
-    E5 --> E6[Well Logs]
-    E6 --> E7[Well Markers]
-    E7 --> E8[Wellbore Trajectories]
-    E8 --> E9[Work Products]
-    
-    E1 --> F[LoadDataCommand per Type]
-    E2 --> F
-    E3 --> F
-    E4 --> F
-    E5 --> F
-    E6 --> F
-    E7 --> F
-    E8 --> F
-    E9 --> F
-    
-    F --> G[DiscoverFilesQuery]
-    G --> H1{Has Files?}
-    H1 -->|Yes| H2[UploadFilesCommand]
-    H1 -->|No| H3[GenerateManifestsCommand]
-    H2 --> H3
-    H3 --> I[LoadFromManifestCommand]
-    I --> J[TransformDataCommand]
-    J --> K[UploadRecordsCommand]
-    K --> L[Aggregate Results]
-    L --> M[Display Complete Summary]
-    
-    style C fill:#e1f5fe
-    style P fill:#fff3e0
-    style P2 fill:#e8f5e8
-    style P4 fill:#e8f5e8
-    style F fill:#ffebee
-    style J fill:#e8f5e8
-```
-
-## Data Loading Steps Explained
-
 ### Step 1: Download TNO Dataset Files
 - Downloads official TNO test data from GitLab repository (~2.2GB)
 - Extracts and organizes files into expected directory structure
@@ -67,25 +13,22 @@ graph TD
 ### Step 2: Create Legal Tag
 - Establishes required legal compliance tags for data governance
 - Sets up legal framework required by OSDU platform
-- **Handler**: `CreateLegalTagCommandHandler`
 
 ### Step 3: Upload Files to OSDU (4-step process)
 - **Step 3a**: Request file upload URL from File API
 - **Step 3b**: Upload file content to storage location
 - **Step 3c**: Submit metadata to File Service
 - **Step 3d**: Maintain registry of uploaded files with IDs and versions
-- **Handler**: `UploadFilesCommandHandler`
 
 ### Step 4: Generate Non-Work Product Manifests
+- **Note**: The manifest generation is extremely complex - it was so complex that porting it to C# proved infeasible. Instead, the original [python scripts](../src/generate-manifest-scripts) are used but updated to upload the ACL, legal tag and data partition.
 - Uses CSV templates to generate individual manifests for each data row
 - Processes reference data, wells, wellbores, and related entities
-- **Handler**: `GenerateManifestsCommandHandler`
 
 ### Step 5: Generate Work Product Manifests
 - Iterates through uploaded files registry
 - Retrieves JSON metadata from work product folders
 - Updates manifests with legal tags, ACL permissions, and data partition IDs
-- **Handler**: `GenerateWorkProductManifestCommandHandler`
 
 ### Step 6: Upload Manifests
 - Submits all manifests to OSDU in correct dependency order:
@@ -98,13 +41,6 @@ graph TD
   7. Well Markers (geological markers)
   8. Wellbore Trajectories (directional surveys)
   9. Work Products (final metadata referencing uploaded files)
-- Processes data types sequentially to maintain referential integrity
-- **Handler**: `LoadFromManifestCommandHandler` → `UploadRecordsCommandHandler`
-    style P fill:#fff3e0
-    style P2 fill:#e8f5e8
-    style P4 fill:#e8f5e8
-    style F fill:#ffebee
-    style J fill:#e8f5e8
 
 ## Detailed Process Flow
 
@@ -112,119 +48,66 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant CLI as CLI Application
+    participant Download as DownloadDataHandler
     participant LoadAll as LoadAllDataHandler
     participant Prepare as Prepare Stage
-    participant Load as LoadFromManifestHandler
-    participant Discover as DiscoverFilesQuery
-    participant Upload as UploadFilesCommand
-    participant Transform as TransformDataCommand
-    participant Records as UploadRecordsCommand
+    participant Upload as UploadFilesHandler
+    participant Generate as GenerateManifestsHandler
+    participant Workflow as SubmitManifestsHandler
     participant OSDU as OSDU Platform APIs
 
-    CLI->>LoadAll: LoadAllDataCommand(SourcePath)
+    Note over CLI: Download Data Stage
+    CLI->>Download: DownloadDataCommand(DestinationPath)
+    Download->>Download: Download ZIP from GitLab
+    Download->>Download: Extract to temp directory
+    Download->>Download: Organize files to expected structure
+    Download-->>CLI: Download complete
     
-    Note over LoadAll,Prepare: Prepare Stage - Environment Setup
-    LoadAll->>Prepare: AddUserToOpsGroupCommand
-    Prepare->>OSDU: POST /api/entitlements/v2/groups/{group}/members
-    OSDU-->>Prepare: User added (or already exists)
+    Note over CLI: Prepare Stage - Environment Setup
+    CLI->>LoadAll: LoadAllDataCommand(SourcePath)
     LoadAll->>Prepare: CreateLegalTagCommand
     Prepare->>OSDU: POST /api/legal/v1/legaltags
     OSDU-->>Prepare: Legal tag created (or already exists)
     
-    Note over LoadAll,Load: Data Loading Phase - For Each Data Type
-    LoadAll->>Load: LoadFromManifestCommand(DataType)
-    Load->>Discover: DiscoverFilesQuery(DirectoryPath)
-    Discover-->>Load: SourceFile[]
+    Note over CLI: Data Upload Stage - File Upload Workflow
+    LoadAll->>Upload: UploadFilesCommand(SourceFiles)
     
-    alt Files require upload (RequiresFileUpload=true)
-        Load->>Upload: UploadFilesCommand(SourceFiles)
-        Upload->>OSDU: File upload workflow
-        Note right of OSDU: /api/file/v2/files/uploadURL<br/>/api/file/v2/files/metadata<br/>Azure Blob Storage
-        OSDU-->>Upload: File upload results
-        Upload-->>Load: File upload complete
+    loop For each file requiring upload
+        Upload->>OSDU: GET /api/file/v2/files/uploadURL
+        OSDU-->>Upload: Signed URL + FileSource ID
+        Upload->>OSDU: PUT file to Azure Blob Storage
+        OSDU-->>Upload: Upload confirmation
+        Upload->>OSDU: POST /api/file/v2/files/metadata
+        OSDU-->>Upload: File ID + metadata
+        Upload->>OSDU: GET /api/storage/v2/records/{fileId}/versions
+        OSDU-->>Upload: Record version info
     end
     
-    Load->>Transform: TransformDataCommand(SourceFile, DataType)
-    Transform-->>Load: DataRecord[]
+    Upload-->>LoadAll: File upload registry complete
     
-    Load->>Records: UploadRecordsCommand(DataRecords)
-    Records->>OSDU: Batch upload workflow
-    Note right of OSDU: /api/storage/v2/records<br/>/api/schema-service/v1/schema<br/>Max 500 records per batch
-    OSDU-->>Records: Upload results
-    Records-->>Load: Final results
-    Load-->>LoadAll: LoadResult per data type
-    LoadAll-->>CLI: Complete aggregated LoadResult
-```
-
-## Prepare Stage Details
-
-The prepare stage ensures that the OSDU environment is properly configured before data loading begins. This stage includes user authorization setup and legal tag creation.
-
-### Legal Tag Creation
-
-When `OSDU_LEGAL_TAG` is configured, the application will:
-
-1. **Create Legal Tag**: Creates a legal tag with the specified name
-2. **Default Properties**: Uses standard compliance settings:
-   - Countries of Origin: [US, CA]
-   - Contract ID: No Contract Related
-   - Data Type: Public Domain Data
-   - Export Classification: EAR99
-   - Originator: TNO
-   - Personal Data: No Personal Data
-
-3. **Conflict Handling**: Gracefully handles 409 responses when legal tag already exists
-4. **Validation**: Ensures legal tag is available for data record creation
-
-**Configuration Example:**
-```bash
-export OSDU_LEGAL_TAG="tno-geological-data-public"
-```
-
-### 3. Upload Phase
-```mermaid
-sequenceDiagram
-    participant Handler as UploadRecordsHandler
-    participant Client as OsduHttpClient
-    participant Auth as Azure Identity
-    participant File as File API (/api/file/v2)
-    participant Blob as Azure Blob Storage
-    participant Storage as Storage API (/api/storage/v2)
-    participant Schema as Schema Service (/api/schema-service/v1)
-
-    Handler->>Client: Upload records + files
-    Client->>Auth: Get access token
-    Auth-->>Client: Bearer token
+    Note over CLI: Manifest Generation Stage
+    LoadAll->>Generate: GenerateManifestsCommand
     
-    alt Records require schema validation
-        Client->>Schema: GET /schema/{kind}
-        Schema-->>Client: Schema definition
+    Note over Generate: Non-Work Product Flow
+    Generate->>Generate: Process CSV templates for reference data
+    Generate->>Generate: Generate manifests for wells, wellbores using [csv_to_json_wrapper.py](../src/generate-manifest-scripts/csv_to_json_wrapper.py)
+    
+    Note over Generate: Work Product Flow  
+    Generate->>Generate: Process work product JSON templates
+    Generate->>Generate: Update with uploaded file references
+    Generate->>Generate: Apply legal tags, ACL, data partition
+    
+    Generate-->>LoadAll: All manifests generated
+    
+    Note over CLI: Manifest Upload Stage
+    LoadAll->>Workflow: SubmitManifestsToWorkflowServiceCommand
+    
+    loop For each data type in dependency order
+        Workflow->>OSDU: PUT /api/storage/v2/records (batch ≤500)
+        Note right of OSDU: 1. Reference Data<br/>2. Misc Master Data<br/>3. Wells<br/>4. Wellbores<br/>5. Documents<br/>6. Well Logs<br/>7. Well Markers<br/>8. Wellbore Trajectories<br/>9. Work Products
+        OSDU-->>Workflow: Upload results per batch
     end
     
-    alt RequiresFileUpload = true
-        Note over Client,Blob: File Upload Workflow (4 steps)
-        Client->>File: GET /files/uploadURL
-        File-->>Client: Signed URL + FileSource ID
-        Client->>Blob: PUT file to signed URL
-        Blob-->>Client: Upload confirmation
-        Client->>File: POST /files/metadata
-        File-->>Client: File ID + metadata
-        Client->>Storage: GET /records/{fileId}/versions
-        Storage-->>Client: Record version info
-    end
-    
-    Note over Client,Storage: Record Upload with Batching
-    Client->>Storage: PUT /records (batch ≤500)
-    Storage->>Storage: Validate + store records
-    Storage-->>Client: Upload results
-    Client-->>Handler: LoadResult + FileResults
+    Workflow-->>LoadAll: All manifests uploaded
+    LoadAll-->>CLI: Complete load results
 ```
-
-## File Upload Process
-
-The C# implementation includes a complete **4-step file upload workflow** that matches the Python `load_single_file()` function:
-
-1. **Get Upload URL**: Request signed URL from OSDU File API (`/files/uploadURL`)
-2. **Upload to Blob**: Upload file to Azure Blob Storage using signed URL
-3. **Post Metadata**: Submit file metadata to OSDU (`/files/metadata`)
-4. **Get Version**: Retrieve record version from Storage API (`/records/{fileId}/versions`)

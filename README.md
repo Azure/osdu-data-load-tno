@@ -120,56 +120,6 @@ dotnet run -- download-tno --destination "~/osdu-data/tno" --overwrite
 # Load all TNO data types in dependency order (from console project directory)
 dotnet run -- load --source "~/osdu-data/tno"
 ```
-
-The application automatically processes all data types in the correct order:
-1. Reference Data → Misc Master Data → Wells → Wellbores → Documents → Well Logs → Well Markers → Wellbore Trajectories → Work Products
-
-## What Gets Loaded
-
-| Data Type | Description | File Formats | Processing Method |
-|-----------|-------------|--------------|-------------------|
-| Wells | Well master data | CSV, JSON, Excel | Records API |
-| Wellbores | Wellbore information | CSV, JSON, Excel | Records API |
-| Well Logs | Log curve data | LAS, DLIS, CSV | Files + Records API |
-| Documents | Document files | PDF, DOC, XLS, etc. | Files + Records API |
-| Work Products | Work product metadata | JSON manifests | Records API with file references |
-| Reference Data | Lookup tables | CSV, JSON | Records API |
-| *...and more* | See [Data Load Process](docs/DATA_LOAD_PROCESS.md) for complete list | | |
-
-## Expected Directory Structure
-
-The application expects the following directory structure (automatically created by `dotnet run download-tno`):
-
-**Cross-Platform Default**: `~/osdu-data/tno/` resolves to:
-- **Windows**: `C:\Users\{username}\osdu-data\tno`
-- **Linux**: `/home/{username}/osdu-data/tno`  
-- **macOS**: `/Users/{username}/osdu-data/tno`
-
-```
-~/osdu-data/tno/                     # Default location (cross-platform)
-├── datasets/                        # File data (Phase 3)
-│   ├── documents/                   # Document files
-│   ├── markers/                     # Marker data files  
-│   ├── trajectories/                # Trajectory data files
-│   └── well-logs/                   # Well log files
-├── manifests/                       # Generated manifest directories (Phases 1-2)
-│   ├── reference-manifests/         # Reference data manifests
-│   ├── misc-master-data-manifests/  # Misc master data manifests
-│   ├── master-well-data-manifests/  # Well master data manifests
-│   └── master-wellbore-data-manifests/ # Wellbore master data manifests
-├── TNO/                            # TNO-specific data
-│   ├── contrib/                     # TNO contributed data
-│   └── provided/
-│       └── TNO/
-│           └── work-products/       # Work product data (Phase 4)
-│               ├── markers/
-│               ├── trajectories/
-│               ├── well\ logs/      # Note: contains space
-│               └── documents/
-├── schema/                          # OSDU schema files
-└── templates/                       # Data templates
-```
-
 ## Azure Deployments
 
 ### Configure Environment
@@ -227,7 +177,7 @@ For detailed information on specific topics, see our documentation:
 
 **Solutions**:
 - **Azure CLI**: Ensure you're logged in: `az login --tenant your-tenant-id`
-- **Permissions**: Verify you have the `users.datalake.ops` role in OSDU
+- **Permissions**: Verify you have the `users.datalake.ops` and `users@<data partition>.dataservices.energy roles` role in OSDU
 - **Configuration**: Check TenantId and ClientId in configuration
 - **Managed Identity**: Verify Managed Identity is configured (when running on Azure)
 - **Scope**: Ensure the scope is correctly set to `{ClientId}/.default`
@@ -249,41 +199,7 @@ fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
       [2e82ab6a] Step 4 Failed: Could not retrieve record version for FileID: opendes:dataset--File.Generic:e4f2b1ee-2732-4259-ab47-d30ff4c2a095
 ```
 **Solutions**:
-- Kill the OSDU-Storage pods
-
-## Error Categories and Handling
-
-### 1. Transient Errors (Retry with Exponential Backoff)
-- Network timeouts
-- HTTP 503 Service Unavailable
-- HTTP 429 Too Many Requests
-- OAuth2 token expiration
-- Temporary OSDU service unavailability
-
-### 2. Permanent Errors (Fail Fast)
-- HTTP 400 Bad Request (invalid data format)
-- HTTP 401 Unauthorized (invalid credentials)
-- HTTP 403 Forbidden (insufficient permissions)
-- HTTP 413 Payload Too Large (batch exceeds 500 records) → **Auto-handled by intelligent batching**
-- Schema validation failures
-- Invalid file formats
-
-### 3. Partial Failures (Continue Processing)
-- Some records in batch succeed, others fail
-- Some files upload successfully, others fail
-- Continue processing remaining batches/files
-- Report detailed success/failure metrics per data type
-
-## Error Code Reference
-
-| Error Code | Description | Solution |
-|------------|-------------|----------|
-| HTTP 400 | Bad Request - Invalid data format | Review field mappings and data validation |
-| HTTP 401 | Unauthorized - Authentication failure | Check credentials and OSDU role assignment |
-| HTTP 403 | Forbidden - Insufficient permissions | Verify `users.datalake.ops` role |
-| HTTP 413 | Payload Too Large | ✅ Auto-handled by intelligent batching |
-| HTTP 429 | Too Many Requests | Retry logic handles automatically |
-| HTTP 503 | Service Unavailable | Retry logic handles automatically |
+- Restart the OSDU-Storage pods
 
 
 ## Contributing
