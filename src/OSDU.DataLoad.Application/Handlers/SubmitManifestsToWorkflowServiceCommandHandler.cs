@@ -187,6 +187,8 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
             _logger.LogInformation("Manifest submission completed - Total: {Total}, Successful: {Successful}, Failed: {Failed}, Duration: {Duration:mm\\:ss}",
                 totalProcessed, totalSuccessful, totalFailed, duration);
 
+            _logger.LogInformation("Note: Workflow status checks are running in background and will be logged as they complete");
+
             return new LoadResult
             {
                 IsSuccess = overallSuccess,
@@ -233,6 +235,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
         var allMasterDataRecords = new List<object>();
         var allProcessedFiles = new List<string>();
         _logger.LogInformation("Preparing batch request...this may take a few min");
+
         foreach (var manifestFile in manifestFiles)
         {
             var fileName = Path.GetFileName(manifestFile);
@@ -309,7 +312,19 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     successfulRecords += recordsInBatch;
                     _logger.LogInformation("✓ Successfully submitted batch {BatchNumber} for {DataType}: {RecordsInBatch} records",
                         batchNumber, dataType, recordsInBatch);
-                    await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+
+                    // Start workflow status checking in background (fire-and-forget)
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error in background workflow status check for RunId: {RunId}", result.RunId);
+                        }
+                    }, cancellationToken);
                 }
                 else
                 {
@@ -397,7 +412,19 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     successfulRecords++;
                     _logger.LogInformation("✓ Successfully submitted manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}",
                         currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName);
-                    await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+
+                    // Start workflow status checking in background (fire-and-forget)
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error in background workflow status check for RunId: {RunId}", result.RunId);
+                        }
+                    }, cancellationToken);
                 }
                 else
                 {
