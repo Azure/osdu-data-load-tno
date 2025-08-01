@@ -57,6 +57,7 @@ public class DataLoadApplication
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Unexpected application error occurred");
+            await Task.Delay(Timeout.Infinite);
             return 99; // General application error
         }
     }
@@ -408,78 +409,66 @@ public class DataLoadApplication
             DisplayStepResult("Legal Tag Creation", legalTagResult);
             overallSuccess = overallSuccess && legalTagResult.IsSuccess;
 
-            //// Step 2: Upload Dataset Files 
-            //if (overallSuccess)
-            //{
-                //_logger.LogInformation("Step 2: Uploading dataset files from configured directories");
-                //var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
-                //DisplayStepResult("Dataset File Upload", uploadResult);
-                //var uploadSuccess = uploadResult.IsSuccess;
-                //overallSuccess = overallSuccess && uploadResult.IsSuccess;
-            //}
-            //else
-            //{
-            //    _logger.LogError("Skipping data set upload due to legal tag creation failure");
-            //}
+            if (!legalTagResult.IsSuccess)
+            {
+                _logger.LogError("Creating legal tag failed. Check for authorization issues. User must have users.datalake.ops and users@<data partition>.dataservices.energy roles.");
+            }
 
-            ////Step 3: Generate Manifests
-            //if (overallSuccess)
-            //{
-                _logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
-                var manifestResult = await _mediator.Send(new GenerateManifestsCommand
-                {
-                    SourceDataPath = source,
-                    OutputPath = source,
-                    DataPartition = dataPartition,
-                    LegalTag = legalTag,
-                    AclViewer = aclViewer,
-                    AclOwner = aclOwner
-                });
-                DisplayStepResult("Manifest Generation", manifestResult);
-                overallSuccess = overallSuccess && manifestResult.IsSuccess;
-            //}
-            //else
-            //{
-            //    _logger.LogError("Skipping manifest generate due to data set upload failure");
-            //}
+            // Step 2: Upload Dataset Files 
+            _logger.LogInformation("Step 2: Uploading dataset files from configured directories");
+            var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
+            DisplayStepResult("Dataset File Upload", uploadResult);
+            overallSuccess = overallSuccess && uploadResult.IsSuccess;
 
-            //// Step 4: Submit Manifests to Workflow Service
-            //if (overallSuccess)
-            //{
-                _logger.LogInformation("Step 4: Submitting manifests to workflow service");
-                
-                // Use the manifests directory that contains both work product and non-work product manifests
-                var manifestsDirectory = Path.Combine(source, "manifests");
+            if (!uploadResult.IsSuccess)
+            {
+                _logger.LogError("Uploading dataset files was not successful. Check logs for how many files failed.");
+            }
 
-                var workflowResult = await _mediator.Send(new SubmitManifestsToWorkflowServiceCommand
-                {
-                    SourceDataPath = source,
-                    DataPartition = dataPartition
-                });
-                DisplayStepResult("Manifest Workflow Submission", workflowResult);
-                overallSuccess = overallSuccess && workflowResult.IsSuccess;
-             //}
-             //else
-             //{
-             //    _logger.LogError("Skipping workflow submission due to manifest generation failure");
-             //}
-            
+            // Step 3: Generate Manifests
+            _logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
+            var manifestResult = await _mediator.Send(new GenerateManifestsCommand
+            {
+                SourceDataPath = source,
+                OutputPath = source,
+                DataPartition = dataPartition,
+                LegalTag = legalTag,
+                AclViewer = aclViewer,
+                AclOwner = aclOwner
+            });
+            DisplayStepResult("Manifest Generation", manifestResult);
+            overallSuccess = overallSuccess && manifestResult.IsSuccess;
+            if (!manifestResult.IsSuccess)
+            {
+                _logger.LogError("Generating manifests was not successful. Check input directory paths.");
+            }
+
+            // Step 4: Submit Manifests to Workflow Service
+            _logger.LogInformation("Step 4: Submitting manifests to workflow service");
+
+            // Use the manifests directory that contains both work product and non-work product manifests
+            var manifestsDirectory = Path.Combine(source, "manifests");
+
+            var workflowResult = await _mediator.Send(new SubmitManifestsToWorkflowServiceCommand
+            {
+                SourceDataPath = source,
+                DataPartition = dataPartition
+            });
+            DisplayStepResult("Manifest Workflow Submission", workflowResult);
+            overallSuccess = overallSuccess && workflowResult.IsSuccess;
+            if (!workflowResult.IsSuccess)
+            {
+                _logger.LogError("Submitting manifests to workflow service was not successful. Check for authorization issues. Note: The loader does not verify if the workflow was successful, only that it was successfully submitted.");
+            }
+
             // Display overall results
             var totalDuration = DateTime.UtcNow - startTime;
-            _logger.LogInformation("Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", 
-                overallSuccess ? "Success" : "Failed", totalDuration);
+            _logger.LogInformation("Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", overallSuccess ? "Success" : "Failed", totalDuration);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during load operation");
         }
-    }
-
-    private static bool IsUploadableFile(string filePath)
-    {
-        var extension = Path.GetExtension(filePath).ToLowerInvariant();
-        var excludedExtensions = new[] { ".json", ".log", ".txt", ".md" };
-        return !excludedExtensions.Contains(extension) && !Path.GetFileName(filePath).StartsWith(".");
     }
 
     private void DisplayStepResult(string stepName, LoadResult result)
@@ -497,31 +486,6 @@ public class DataLoadApplication
         if (!result.IsSuccess && !string.IsNullOrEmpty(result.ErrorDetails))
         {
             _logger.LogError("Error: {ErrorDetails}", result.ErrorDetails);
-        }
-    }
-
-    private void DisplayLoadResult(LoadResult result)
-    {
-        _logger.LogInformation("Load Results - Status: {Status}", result.IsSuccess ? "Success" : "Failed");
-        _logger.LogInformation("Processed Records: {ProcessedRecords}", result.ProcessedRecords);
-        _logger.LogInformation("Successful Records: {SuccessfulRecords}", result.SuccessfulRecords);
-        _logger.LogInformation("Failed Records: {FailedRecords}", result.FailedRecords);
-        _logger.LogInformation("Duration: {Duration}", result.Duration);
-
-        if (!string.IsNullOrEmpty(result.Message))
-        {
-            _logger.LogInformation("Message: {Message}", result.Message);
-        }
-
-        if (!string.IsNullOrEmpty(result.ErrorDetails))
-        {
-            _logger.LogError("Error Details: {ErrorDetails}", result.ErrorDetails);
-        }
-
-        if (result.ProcessedRecords > 0)
-        {
-            var successRate = (double)result.SuccessfulRecords / result.ProcessedRecords * 100;
-            _logger.LogInformation("Success Rate: {SuccessRate:F1}%", successRate);
         }
     }
 
