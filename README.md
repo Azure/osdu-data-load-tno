@@ -1,641 +1,222 @@
-# osdu-data-load-tno
+# OSDU Data Load TNO - C# Implementation
 
-## Operations Persona
+An improved C# application for loading TNO (Netherlands Organisation for Applied Scientific Research) data into the OSDU platform.
 
-This method of loading data provides a way to load data using ARM templates. The solution leverages a cloud based container to execute a data load using data hosted in an Azure Storage Account file share. To load data follow the 2 step process.
+## Key Features
 
-> The ingested TNO data is OSDU<sup>TM</sup> M10 specific. If you need to load a different TNO data set (e.g. [M8](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/tree/Azure/M8)), you should use the [Developer Persona](#developer-persona).
+- **Simple CLI Interface** - Three intuitive commands to get you started
+- **Automatic Processing** - Handles all TNO data types in the correct dependency order
+- **File Upload Support** - Complete 4-step OSDU file upload workflow
+- **Secure Authentication** - Uses Azure Identity for passwordless authentication
+- **Progress Tracking** - Real-time progress updates and detailed logging
+- **Error Resilience** - Comprehensive retry policies and error handling
+- **Clean Architecture** - CQRS pattern with proper separation of concerns
 
-__Step 1__
+## Data Loading Process Overview
 
-Deploy resources to Azure using this [ARM template](https://github.com/Azure/osdu-data-load-tno/blob/main/azuredeploy.json). Data will be downloaded from OSDU, extracted and Uploaded into a Storage Account.
+The application follows a comprehensive 6-step process to load TNO data into OSDU:
 
-[![Load from Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fosdu-data-load-tno%2Fmain%2Fazuredeploy.json)
+1. **Downloads TNO Dataset Files** - Retrieves official TNO test data from GitLab repository
+2. **Creates Legal Tag** - Establishes required legal compliance tags for data governance
+3. **Uploads Files to OSDU** - Executes 4-step file upload workflow:
+   - Requests file upload URL from File API
+   - Uploads file content to storage
+   - Submits metadata to File Service
+   - Maintains registry of uploaded files with IDs and versions
+4. **Generates Non-Work Product Manifests** - Creates manifests for master data:
+   - Uses CSV templates to generate individual manifests for each data row
+   - Processes reference data, wells, wellbores, and related entities
+5. **Generates Work Product Manifests** - Creates work product metadata:
+   - Iterates through uploaded files registry
+   - Retrieves JSON metadata from work product folders
+   - Updates manifests with legal tags, ACL permissions, and data partition IDs
+6. **Uploads Manifests** - Submits all manifests to OSDU in correct dependency order
 
-Estimated Time: 1.5-2 hours
+For detailed information about each step, see [Data Load Process Documentation](docs/DATA_LOAD_PROCESS.md).
 
-__Step 2__
+## Quick Start
 
-Load data to an OSDU instance by executing the Template Spec created by `Step 1`.
+### 1. Prerequisites
 
-Estimated Time: 45 minutes
+Before you begin, ensure you have:
 
-A container instance will be created in the same resource group. You can check its logs to monitor progress. Additional logs and state will be present in the created storage account's `output` file share. Once the container stops execution (enters a terminated state) the data load is complete and you can review the container logs and file share logs for output details. The main log is the `dataloader-datestamp.log` file.
+- **.NET 9.0** or later installed
+- **Azure CLI** for authentication: `az login --tenant your-tenant-id`
+- [**Azure Developer CLI (azd)** for deployments](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
+- **OSDU Platform Access** with `users.datalake.ops` and `users@<data partition>.dataservices.energy roles` role
+- **Visual Studio** or **VS Code** (optional, for development)
 
-Required Parameters for Loading an OSDU Instance.
+### 2. Configure the Application
 
-- OSDU Endpoint
-
-  The URL where the OSDU API is available.
-  Example: `https://myosdu.contoso.com`
-
-- Data Partition Name
-
-  The name of the OSDU Data Partition where data should be loaded.
-  Example: `myosdu-billing`
-
-- Viewer Group
-
-  The ACL group to be used by the load for data read.
-  Example: `data.default.viewers`
-
-- Owner Group
-
-  The ACL group to be used by the load for data ownership.
-  Example: `data.default.owners`
-
-- Data Domain
-
-  The domain of the ACL's for data ownership. (Not typically changed)
-  Example: `dataservices.energy`
-
-- Legal Tag
-
-  The legal tag to be used by the load in `{DATA_PARTITION}-{TAG_NAME}` format
-
-- Client Id
-
-  The client id for authentication that has authorization to load data.
-
-- Client Secret
-
-  The client secret for authentication that has authorization to load data.
-
-> Cleanup: Logs and state are persisted to the storage account in the created resource group. The `output` file share needs to be removed prior to starting additional loads.
-
-## Developer Persona
-
-This method of loading data is intended for engineers wishing to customize control or manually work with data loads.
-
-This solution supports [GitHub Codespaces](https://github.com/features/codespaces) as preferred, however [VSCode Remote containers](https://code.visualstudio.com/docs/remote/containers) can be utilized assuming the host machine has enough resources allocated to Docker.  A custom container will be built with a post container build hook that will download the [open-test-data](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data) from OSDU and copy files into a custom directory structure for the ingestion scripts to process. The downloaded TNO data is M10 specific, but it can be adjusted to work with other OSDU milestones (e.g. [M8](https://community.opengroup.org/osdu/platform/data-flow/data-loading/open-test-data/-/tree/Azure/M8)) by modifying the data download URL and data extraction steps in [on-create.sh](./.devcontainer/on-create.sh).
-
-__Environment Variables__
-
-Add environment variables to a `.envrc` file which will be auto loaded by [direnv](https://direnv.net) after execution of `direnv allow`.
-
-```bash
-export AZURE_TENANT=<your_azure_tenant>
-export CLIENT_ID=<your_application_id>
-export CLIENT_SECRET=<your_application_secret>
-export NAME=<your_platform_name>
-export DOMAIN=<your_domain_name>
-export PARTITION=<your_partition_name>
-
-export DATA_PARTITION=$NAME-$PARTITION
-export OSDU_ENDPOINT=https://$NAME.$DOMAIN
-export LEGAL_TAG=${DATA_PARTITION}-open-test-data
-export LOGIN_ENDPOINT=https://login.microsoftonline.com/${AZURE_TENANT}/oauth2/v2.0/token
-export SCOPE="$CLIENT_ID/.default openid profile offline_access"
-
-export URL="https://login.microsoftonline.com/${AZURE_TENANT}/oauth2/v2.0/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=http%3a%2f%2flocalhost%3a8080&response_mode=query&scope=${CLIENT_ID}%2f.default&state=12345&sso_reload=true"
-
-export REFRESH_TOKEN=<your_refresh_token>
-```
-
-__API access tokens__
-
-A refresh token is used by loading scripts to request [OAuth2.0 access tokens](https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow).  The following code snippet can help retrieve a valid Refresh Token once a redirect url of `http://localhost:8080` has been added to a [Web Platform Configuration](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app#add-a-redirect-uri) on the AD Application.
-
-Add the retrieved refresh token to the `.envrc` file and allow variables to load using `direnv allow`.
-
-```bash
-# Open the following URL in a browser
-echo $URL
-
-# Set the Response from the Browser in a Variable
-RESPONSE="<your_response>"
-
-# Get REFRESH Token and set in in the .envrc file
-REFRESH_TOKEN=$(curl --silent --request POST \
-  --url https://login.microsoftonline.com/${AZURE_TENANT}/oauth2/v2.0/token \
-  --header "content-type: application/x-www-form-urlencoded" \
-  --data "grant_type=authorization_code" \
-  --data "client_id=${CLIENT_ID}" \
-  --data "client_secret=${CLIENT_SECRET}" \
-  --data "code=$(echo $RESPONSE | cut -d "=" -f 2 | cut -d "&" -f 1)" \
-  --data "scope=$CLIENT_ID/.default openid profile offline_access" \
-  --data "redirect_uri=http%3A%2F%2Flocalhost%3a8080" | jq -r .refresh_token)
-
-echo $REFRESH_TOKEN
-
-```
-
-__Execute Data Load__
-
-In a terminal window execute the following bash script. `/workspace/load.sh`
-
-By default the entire load process will execute, but each action has an environment variable feature flag that can toggle actions off.
-
-```bash
-LOG_LEVEL=debug             # Activate Log Debug
-PIP_INSTALL=false           # Disable PIP installation
-
-CONFIGURE_INI=false         # Disable creation of the python configuration file
-CHECK_LEGAL_TAG=false       # Disable Legal Tag Validation
-GENERATE_MANIFEST=false     # Disable Manifest Generation
-LOAD_MASTERDATA=false       # Disable Loading of Master Data
-LOAD_FILES=false            # Disable File Ingestion
-LOAD_WORKPRODUCTS=false     # Disable Loading of WorkProducts
-```
-
-# Open Test Data
-
-## Statistics
-
-Loading data and the time it to accomplish a loading process has different factors that need to be understood.
-
-1. Client Bandwidth -- The network bandwidth between the client and the platform.
-2. Client Resources -- The amount of CPU cores and memory that the client can use to process requests.
-3. Client Latency -- The distance from the client to the platform.
-
-The dataset contains files and manifests and a loading process typically takes under hour to accomplish.
-
-__Files – 12,786__
-
-| Count    | Type           | Format   |
-| :------- |:-------------- | --------:|
-| 5904     |  Markers       |      csv |
-| 5944     |  Trajectories  |      csv |
-| 929      |  Well Logs     |      csv |
-| 9        |  Documents     |  pdf/txt |
-
-__Manifests – 12,570__
-
-| Count   | Manfiest Type                      |
-| :------ |:---------------------------------- |
-| 98      |  Reference Data                    |
-| 422     |  Master Data Fields                |
-| 406     |  Master Data Geopolitical Entities |
-| 213     |  Master Data Organisation          |
-| 4947    |  Master Data Wells                 |
-| 6484    |  Master Data Wellbores             |
-
-__Work Product Components – 12,785__
-
-| Count   | Manfiest Type                      |
-| :------ |:---------------------------------- |
-| 9       |  Documents                         |
-| 929     |  Well logs                         |
-| 5904    |  Wellbore Marker Sets              |
-| 5943    |  Wellbore Trajectories             |
-
-__98 Reference Data Manifests are loaded__
-
-```
-Key                                                            Count
--------------------------------------------------------------  -------
-osdu:wks:reference-data--AliasNameType:1.0.0                   5
-osdu:wks:reference-data--CoordinateReferenceSystem:1.0.0       8
-osdu:wks:reference-data--DrillingReasonType:1.0.0              16
-osdu:wks:reference-data--FacilityEventType:1.0.0               3
-osdu:wks:reference-data--FacilityStateType:1.0.0               10
-osdu:wks:reference-data--FacilityType:1.0.0                    2
-osdu:wks:reference-data--GeoPoliticalEntityType:1.0.0          6
-osdu:wks:reference-data--MaterialType:1.0.0                    15
-osdu:wks:reference-data--OperatingEnvironment:1.0.0            2
-osdu:wks:reference-data--ResourceSecurityClassification:1.0.0  1
-osdu:wks:reference-data--SchemaFormatType:1.0.0                3
-osdu:wks:reference-data--UnitOfMeasure:1.0.0                   9
-osdu:wks:reference-data--VerticalMeasurementPath:1.0.0         5
-osdu:wks:reference-data--VerticalMeasurementType:1.0.0         10
-osdu:wks:reference-data--WellboreTrajectoryType:1.0.0          3
-```
-
-__12,472 Manifests are loaded__
-```
-Key                                                            Count
--------------------------------------------------------------  -------
-osdu:wks:master-data--Field:1.0.0                              422
-osdu:wks:master-data--GeoPoliticalEntity:1.0.0                 406
-osdu:wks:master-data--Organisation:1.0.0                       213
-osdu:wks:master-data--Well:1.0.0                               4947
-osdu:wks:master-data--Wellbore:1.0.0                           6484
-```
-
-__12,785 Work Product Components are loaded__
-```
-Key                                                            Count
--------------------------------------------------------------  -------
-osdu:wks:work-product-component--Document:1.0.0                9
-osdu:wks:work-product-component--WellLog:1.0.0                 929
-osdu:wks:work-product-component--WellboreMarkerSet:1.0.0       5904
-osdu:wks:work-product-component--WellboreTrajectory:1.0.0      5943
-
-```
-
-# Overview of File Ingestion
-
-Loading files into the data platform using the Core API is a multi step process and involves moving files in to cloud storage.  It is important to understand the following chart which can be found in the [azure documentation](https://docs.microsoft.com/en-us/azure/storage/common/storage-solution-large-dataset-moderate-high-network?toc=%2Fazure%2Fstorage%2Fblobs%2Ftoc.json).
-
-__Dataset transfer over moderate to high network bandwidth__
-![bandwidth](./diagrams/bandwidth.png)
-
-File ingestion executes the following actions in the platform.
-
-![ingest sequence](./diagrams/fileingest.png)
-
-__Retrieve a Platform Storage URL__
-
-A file url is requested from the platform for an Azure Storage Blob with an authorized [SAS Token](https://docs.microsoft.com/en-us/azure/storage/common/storage-sas-overview#service-sas).
-
-```bash
-###
-# @name uploadURL
-GET {{FILE_HOST}}/files/uploadURL
-Authorization: Bearer {{access_token}}
-Accept: application/json
-Content-Type: application/json
-data-partition-id: {{DATA_PARTITION}}
-
-@FILE_ID = {{uploadURL.response.body.FileID}}
-@FILE_URL = {{uploadURL.response.body.Location.SignedURL}}
-@FILE_SOURCE = {{uploadURL.response.body.Location.FileSource}}
-```
-
-__Write the data to the blob__
-
-Data is written to the Platform using an Azure Storage Account [Put Blob Operation](https://docs.microsoft.com/en-us/rest/api/storageservices/put-blob)
-
-```bash
-###
-# @name uploadFile
-PUT {{FILE_URL}}
-x-ms-blob-type: BlockBlob
-
-< ./sample.las
-```
-
-__Provide MetaData to describe the Generic File__
-
-MetaData is submitted to the File Service once the data has been written and the system then processes and indexes the ingested file.
-
-A valid legal tag with required ACL's always occupies any piece of data and the FILE_SOURCE is a platform pointer that was obtained earlier from the URL request.
-
-```bash
-###
-# @name metaData
-POST {{FILE_HOST}}/files/metadata
-Authorization: Bearer {{access_token}}
-Accept: application/json
-Content-Type: application/json
-data-partition-id: {{DATA_PARTITION}}
-
-{
-    "kind": "osdu:wks:dataset--File.Generic:1.0.0",
-    "acl": {
-        "viewers": [
-            "data.default.viewers@{{DATA_PARTITION}}.dataservices.energy"
-        ],
-        "owners": [
-            "data.default.viewers@{{DATA_PARTITION}}.dataservices.energy"
-        ]
-    },
-    "legal": {
-        "legaltags": [
-            "{{LEGAL_TAG}}"
-        ],
-        "otherRelevantDataCountries": [
-            "US"
-        ],
-        "status": "compliant"
-    },
-    "data": {
-        "ResourceSecurityClassification": "osdu:reference-data--ResourceSecurityClassification:RESTRICTED:",
-        "SchemaFormatTypeID": "osdu:reference-data--SchemaFormatType:LAS2:",
-        "DatasetProperties": {
-            "FileSourceInfo": {
-                "FileSource": "{{FILE_SOURCE}}",
-                "Name": "sample.las"
-            }
-        },
-        "Name": "sample.las"
-        "Description": "well-log"
-    }
-}
-
-@ID = {{metaData.response.body.id}}
-```
-
-__Record Indexing__
-
-The ingestion of a file will always trigger a message is processed to index the data to be retrieved later by search.
-
-## Python Script File Ingestion
-
-A python script is used to execute data load activities and can be used to load a directory of files.
-
-A glob filter pattern is applied to ensure only files with extensions of `pdf`, `txt`, `las`, and `csv` are loaded.
-
-```bash
-python3 src/data_load/load.py datasets --dir "some_directory" --output-file-name "file_load_results.json"
-```
-
-Since files are loaded sequentially by walking the directory structure to accelerate performance an [asynchronous execution]((https://docs.python.org/3/library/concurrent.futures.html)) is performed with a ThreadPoolExecutor.  The number of threads are  automatically calculated with the formula `5 * multiprocessing.cpu_count()` but can be overwritten using the `WORKERS` environment variable.
-
-Blob data is written in `32 Mb` chunks but can also be adjusted using a `MAX_CHUNK_SIZE` environment variable.
-
-The python script is configured to automatically request using a retry and backoff pattern available from the Python [Request](https://requests.readthedocs.io/en/latest/) library.
-
-```python
-retries=5,
-backoff_factor=1.0,
-status_forcelist=(404, 500, 502, 503, 504),
-method_whitelist=["GET", "PUT", "POST", "DELETE"]
-```
-
-## Bash Script Orchestrator
-
-To orchestrate the activities of loading files for a specific dataset a simple bash script is used which controls and sequences specific directories containing files to load as well as where the results should be written.  Keeping track of the ingested file identifiers becomes important to later load the Work Product Component manifests.
-
-_Sample Bash Blocks_
-
-```bash
-  # File Ingest Documents
-  echo "-- WPC Documents: Start" && _START="$(date +%s)"
-  python3 $SCRIPT_DIR/src/data_load/load.py datasets \
-    --dir $SCRIPT_DIR/open-test-data/datasets/documents \
-    --output-file-name "output/loaded-documents-datasets.json"
-  echo "-- WPC Documents: End  $(convertsecs $[ $(date +%s) - ${_START} ])"
-```
-
-# Overview of Manifest Ingestion
-
-To load a manifest into the system the following actions are performed.
-
-![manifest sequence](./diagrams/manifest.png)
-
-Manifests exist as default templates that have a generic `id` with an empty `acl` and `legal` attribute.  Below you will find a few sample manifests that can be used to help understand the format.
-
-_Sample Alais Manifest_
+Update `appsettings.json` in the `src/OSDU.DataLoad.Console/` directory with your OSDU instance details:
 
 ```json
 {
-  "kind": "osdu:wks:Manifest:1.0.0",
-  "ReferenceData": [
-    {
-      "id": "osdu:reference-data--AliasNameType:Borehole",
-      "kind": "osdu:wks:reference-data--AliasNameType:1.0.0",
-      "acl": {
-        "owners": [],
-        "viewers": []
-      },
-      "legal": {
-        "legaltags": [],
-        "otherRelevantDataCountries": []
-      }
-      "data": {
-        "Source": "TNO",
-        "Name": "Borehole",
-        "Code": "Borehole"
-      }
-    }
-  ]
-}
-```
-
-_Sample Field Manifest_
-
-```json
-{
-  "kind": "osdu:wks:Manifest:1.0.0",
-  "MasterData": [
-    {
-      "id": "osdu:master-data--Field:A12-FA",
-      "kind": "osdu:wks:master-data--Field:1.0.0",
-      "acl": {
-        "owners": [],
-        "viewers": []
-      },
-      "legal": {
-        "legaltags": [],
-        "otherRelevantDataCountries": []
-      },
-      "data": {
-        "FieldName": "A12-FA"
-      }
-    }
-  ]
-}
-```
-
-_Sample GeoPoliticalEntity Manifest_
-```json
-{
-  "kind": "osdu:wks:Manifest:1.0.0",
-  "MasterData": [
-    {
-      "id": "osdu:master-data--GeoPoliticalEntity:Netherlands_Country",
-      "kind": "osdu:wks:master-data--GeoPoliticalEntity:1.0.0",
-      "acl": {
-        "owners": [],
-        "viewers": []
-      },
-      "legal": {
-        "legaltags": [],
-        "otherRelevantDataCountries": []
-      },
-      "data": {
-          "Source": "TNO",
-          "GeoPoliticalEntityTypeID": "osdu:reference-data--GeoPoliticalEntityType:Country:",
-          "GeoPoliticalEntityName": "Netherlands"
-      }
-    }
-  ]
-}
-```
-
-_Sample Organisation Manifest_
-```json
-{
-  "kind": "osdu:wks:Manifest:1.0.0",
-  "MasterData": [
-    {
-      "id": "osdu:master-data--Organisation:A%20en%20G%20van%20den%20Bosch%20B.V.",
-      "kind": "osdu:wks:master-data--Organisation:1.0.0",
-      "acl": {
-        "owners": [],
-        "viewers": []
-      },
-      "legal": {
-        "legaltags": [],
-        "otherRelevantDataCountries": []
-      },
-      "data": {
-          "Source": "TNO",
-          "OrganisationName": "A%20en%20G%20van%20den%20Bosch%20B.V."
-      }
-    }
-  ]
-}
-```
-
-> Manifests reference each other which require manifest loads to be properly sequenced to ensure dependencies exist.
-
-_Sample Well Manifest_
-```json
-{
-  "kind": "osdu:wks:Manifest:1.0.0",
-  "MasterData": [
-    {
-      "id": "osdu:master-data--Well:1000",
-      "kind": "osdu:wks:master-data--Well:1.0.0",
-      "acl": {
-        "owners": [],
-        "viewers": []
-      },
-      "legal": {
-        "legaltags": [],
-        "otherRelevantDataCountries": []
-      },
-      "meta": [
-        {
-          "kind": "Unit",
-          "name": "m",
-          "persistableReference": "{\"abcd\":{\"a\":0.0,\"b\":1.0,\"c\":1.0,\"d\":0.0},\"symbol\":\"m\",\"baseMeasurement\":{\"ancestry\":\"L\",\"type\":\"UM\"},\"type\":\"UAD\"}",
-          "unitOfMeasureID": "osdu:reference-data--UnitOfMeasure:m:",
-          "propertyNames": [
-            "VerticalMeasurements[].VerticalMeasurement"
-          ]
-        }
-      ],
-      "data": {
-        "Source": "TNO",
-          "NameAliases": [
-            {
-              "AliasName": "ACA-11",
-              "AliasNameTypeID": "osdu:reference-data--AliasNameType:Well:"
-            },
-            {
-              "AliasName": "1000",
-              "AliasNameTypeID": "osdu:reference-data--AliasNameType:UWI:"
-            }
-        ],
-        "GeoContexts": [
-          {
-            "GeoPoliticalEntityID": "osdu:master-data--GeoPoliticalEntity:Netherlands_Country:",
-            "GeoTypeID": "osdu:reference-data--GeoPoliticalEntityType:Country:"
-          },
-          {
-            "GeoPoliticalEntityID": "osdu:master-data--GeoPoliticalEntity:Limburg_Province:",
-            "GeoTypeID": "osdu:reference-data--GeoPoliticalEntityType:Province:"
-          },
-          {
-            "GeoPoliticalEntityID": "osdu:master-data--GeoPoliticalEntity:L_Quadrant:",
-            "GeoTypeID": "osdu:reference-data--GeoPoliticalEntityType:Quadrant:"
-          }
-        ],
-        "SpatialLocation": {
-          "Wgs84Coordinates": {
-            "type": "FeatureCollection",
-            "features": [
-              {
-                "type": "Feature",
-                "geometry": {
-                  "type": "Point",
-                  "coordinates": [
-                    5.98136045,
-                    51.43503877
-                  ]
-                },
-                "properties": {}
-              }
-            ]
-          }
-        },
-        "FacilityTypeID": "osdu:reference-data--FacilityType:Well:",
-        "FacilityOperators": [
-            {
-                "FacilityOperatorOrganisationID": "osdu:master-data--Organisation:ROVD:"
-            }
-        ],
-        "OperatingEnvironmentID": "osdu:reference-data--OperatingEnvironment:On:",
-        "FacilityName": "ACA-11",
-        "FacilityStates": [
-          {
-            "FacilityStateTypeID": "osdu:reference-data--FacilityStateType:Abandoned:"
-          }
-        ],
-        "FacilityEvents": [
-          {
-            "FacilityEventTypeID": "osdu:reference-data--FacilityEventType:Spud:",
-            "EffectiveDateTime": "1909-04-05T00:00:00"
-          },
-          {
-            "FacilityEventTypeID": "osdu:reference-data--FacilityEventType:TDReached:",
-            "EffectiveDateTime": "1910-01-19T00:00:00"
-          }
-        ],
-        "DefaultVerticalMeasurementID": "RotaryTable",
-        "VerticalMeasurements": [
-          {
-            "VerticalMeasurementID": "RotaryTable",
-            "VerticalMeasurement": 29.3,
-            "VerticalMeasurementTypeID": "osdu:reference-data--VerticalMeasurementType:RotaryTable:",
-            "VerticalMeasurementPathID": "osdu:reference-data--VerticalMeasurementPath:Elevation:",
-            "VerticalCRSID": "osdu:reference-data--CoordinateReferenceSystem:5709:"
-          }
-        ]
-      }
-    }
-  ]
-}
-```
-
-__Manifests are loaded using workflow.__
-
-A specific format for manifest ingestion is required with need the following transformations.
-
-1. Modify the Reference Data Id with the proper Data Partition.
-2. Apply the desired Viewer and Owner ACL.
-3. Assign the desired Legal Tag with relevant country.
-4. Wrap the Manifest in an Execution Context
-
-_Sample Manifest Ingestion Submission_
-```json
-{
-  "executionContext": {
-    "Payload": {
-      "AppKey": "test-app",
-      "data-partition-id": "{{DATA_PARTITION}}"
-    },
-    "manifest": {
-      "kind": "osdu:wks:Manifest:1.0.0",
-      "ReferenceData": [
-        {
-          "id": "{{DATA_PARTITION}}:reference-data--AliasNameType:Borehole",
-          "kind": "osdu:wks:reference-data--AliasNameType:1.0.0",
-          "acl": {
-            "viewers": [
-              "data.default.viewers@{{DATA_PARTITION}}.dataservices.energy"
-            ],
-            "owners": [
-              "data.default.owners@{{DATA_PARTITION}}.dataservices.energy"
-            ]
-          },
-          "legal": {
-            "legaltags": [
-              "{{DATA_PARTITION}}-{{TAG_NAME}}"
-            ],
-            "otherRelevantDataCountries": [
-              "US"
-            ]
-          },
-          "data": {
-           "Source": "TNO",
-            "Name": "Borehole",
-            "Code": "Borehole"
-          }
-        }
-      ]
-    }
+  "Osdu": {
+    "BaseUrl": "https://your-osdu-instance.com",
+    "TenantId": "your-tenant-id",
+    "ClientId": "your-client-id", 
+    "DataPartition": "your-data-partition",
+    "LegalTag": "{DataPartition}-your-legal-tag",
+    "AclViewer": "data.default.viewers@{DataPartition}.dataservices.energy",
+    "AclOwner": "data.default.owners@{DataPartition}.dataservices.energy",
+    "UserEmail": "your-object-id" // Optional - assigns use users.datalake.ops if set
   }
 }
 ```
 
+**Note**: You can provide environment variables instead. See: **[Configuration Guide](docs/CONFIGURATION.md)**
+
+### 3. Build and Run
+
+```bash
+# Navigate to the console project
+cd src/OSDU.DataLoad.Console
+
+# Build the solution
+dotnet build
+
+# Run commands directly
+dotnet run -- help
+dotnet run -- download-tno --destination "~/osdu-data/tno"
+dotnet run -- load --source "~/osdu-data/tno"
+```
+## Available Commands
+
+### Default Behavior (No Arguments)
+```bash
+# Run without any arguments - downloads data if needed, then loads it
+dotnet run
+```
+When run without arguments, the application will:
+1. Check for TNO data in `~/osdu-data/tno/` (user home directory)
+2. Download the test data if not present (~2.2GB)
+3. Load all data types into OSDU platform automatically
+
+This is the **easiest way to get started** - just configure your OSDU settings and run!
+
+### Help Command
+```bash
+# From console project directory (recommended)
+dotnet run -- help
+
+# Or from src directory
+dotnet run --project OSDU.DataLoad.Console --working-directory OSDU.DataLoad.Console -- help
+```
+Shows available commands, usage examples, and current configuration status.
+
+### Download TNO Test Data
+```bash
+# Download ~2.2GB of official test data (from console project directory)
+dotnet run -- download-tno --destination "~/osdu-data/tno"
+
+# Overwrite existing data
+dotnet run -- download-tno --destination "~/osdu-data/tno" --overwrite
+```
+
+### Load Data
+```bash
+# Load all TNO data types in dependency order (from console project directory)
+dotnet run -- load --source "~/osdu-data/tno"
+```
+## Azure Deployments
+
+### Configure Environment
+
+1. Create an azd environment
+
+    ```bash
+    # Navigate to the project root
+    azd init -e dev
+    ```
+
+2. Configure the environment variables
+
+    ```bash
+    azd env set OSDU_TenantId $(az account show --query tenantId -o tsv )
+    azd env set AZURE_SUBSCRIPTION_ID <Azure subscription id>
+    azd env set AZURE_LOCATION <Azure Region>
+    azd env set OSDU_BaseUrl <https://your-osdu-instance.com>
+    azd env set OSDU_ClientId <your-client-ID>
+    azd env set OSDU_DataPartition <your-data-partition>
+    azd env set OSDU_LegalTag <{DataPartition}-your-legal-tag>
+    azd env set OSDU_AclViewer <data.default.viewers@{DataPartition}.dataservices.energy>
+    azd env set OSDU_AclOwner <data.default.owners@{DataPartition}.dataservices.energy>
+    ```
+
+### Deploy the Infrastructure
+
+  ```bash
+  azd provision
+  ```
+
+### Assign managed identity `users.datalake.ops` role
+
+**Important**: Get the object ID of the managed identity and assign it `users.datalake.ops` and `users@<data partition>.dataservices.energy roles`on your data partition.
+
+### Deploy the Application and monitor the container's console output
+
+  ```bash
+  azd deploy
+  ```
+
+## Additional Resources
+
+For detailed information on specific topics, see our documentation:
+
+- **[Data Loading Process](docs/DATA_LOAD_PROCESS.md)** - Detailed workflow and processing order
+- **[Configuration Guide](docs/CONFIGURATION.md)** - Advanced configuration options and environment variables
+
+---
+
+## Common Issues and Solutions
+
+### 1. Authentication Failures
+**Symptoms**: HTTP 401 errors, "Failed to authenticate" messages
+
+**Solutions**:
+- **Azure CLI**: Ensure you're logged in: `az login --tenant your-tenant-id`
+- **Permissions**: Verify you have the `users.datalake.ops` and `users@<data partition>.dataservices.energy roles` role in OSDU
+- **Configuration**: Check TenantId and ClientId in configuration
+- **Managed Identity**: Verify Managed Identity is configured (when running on Azure)
+- **Scope**: Ensure the scope is correctly set to `{ClientId}/.default`
+- **Environment Variables**: Verify `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` are set correctly
+
+### 2. Performance Issues
+**Symptoms**: Slow upload speeds, timeouts
+
+**Solutions**:
+- **Run upload in Azure**: See [Azure Deployments](#azure-deployments)
+- **Adjust batch size**: Adjust the MasterDataManifestSubmissionBatchSize value to increae the number of manifests submitted in a single workflow request.
+
+### 3. File Upload - Metadata Issues
+**Symptoms**: The file is uploaded and metadata is created, but /v2/records/{id} returns 404
+```
+fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
+      [2e82ab6a] GET https://pm44a0805b33bc4.oep.ppe.azure-int.net/api/storage/v2/records/opendes:dataset--File.Generic:e4f2b1ee-2732-4259-ab47-d30ff4c2a095 failed with status NotFound
+fail: OSDU.DataLoad.Infrastructure.Services.OsduHttpClient[0]
+      [2e82ab6a] Step 4 Failed: Could not retrieve record version for FileID: opendes:dataset--File.Generic:e4f2b1ee-2732-4259-ab47-d30ff4c2a095
+```
+**Solutions**:
+- Restart the OSDU-Storage pods
+
+
+### 4. No container app logs
+**Symptoms**: No logs in the container app. You may see a kubernetes error.
+
+**Solutions**:
+- **Redeploy**: Redeploy the container with `az deploy`
 
 ## Contributing
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+This solution follows Clean Architecture and CQRS principles. For detailed information on contributing:
+
+- Review the existing code patterns and structure
+- Follow established naming conventions
+- Add appropriate unit tests for new features
+- Update documentation as needed
+
+This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 

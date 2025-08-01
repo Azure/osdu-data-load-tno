@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "environmentName": {
+        "value": "${AZURE_ENV_NAME}"
+      },
+      "location": {
+        "value": "${AZURE_LOCATION}"
+      },
+      "osduDataloadConsoleExists": {
+        "value": "${SERVICE_OSDU_DATALOAD_CONSOLE_RESOURCE_EXISTS=false}"
+      },
+      "principalId": {
+        "value": "${AZURE_PRINCIPAL_ID}"
+      },
+      "TenantId": {
+        "value": "${OSDU_TenantId}"
+      },
+      "AclOwner":{
+        "value": "${OSDU_AclOwner}"
+      },
+      "AclViewer":{
+        "value": "${OSDU_AclViewer}"
+      },
+      "BaseUrl":{
+        "value": "${OSDU_BaseUrl}"
+      },
+      "ClientId":{
+        "value": "${OSDU_ClientId}"
+      },
+      "DataPartition":{
+        "value": "${OSDU_DataPartition}"
+      },
+      "LegalTag":{
+        "value": "${OSDU_LegalTag}"
+      },
+      "UserObjectId":{
+        "value": "${OSDU_UserEmail}"
+      }
+    }
+}
