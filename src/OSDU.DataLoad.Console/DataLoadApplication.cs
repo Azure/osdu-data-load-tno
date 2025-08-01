@@ -463,7 +463,7 @@ public class DataLoadApplication
 
             // Display overall results
             var totalDuration = DateTime.UtcNow - startTime;
-            _logger.LogInformation("Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", overallSuccess ? "Success" : "Failed", totalDuration);
+            _logger.LogInformation("Finished - Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", overallSuccess ? "Success" : "Failed", totalDuration);
         }
         catch (Exception ex)
         {
