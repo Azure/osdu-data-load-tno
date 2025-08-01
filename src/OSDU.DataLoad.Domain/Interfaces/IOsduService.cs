@@ -22,4 +22,6 @@ public interface IOsduService
     /// Submits a workflow request to OSDU for manifest processing
     /// </summary>
     Task<LoadResult> SubmitWorkflowAsync(object workflowRequest, CancellationToken cancellationToken = default);
+
+    Task<WorkflowStatus> GetWorkflowStatusAsync(string runId, CancellationToken cancellationToken = default);
 }

@@ -187,7 +187,7 @@ For detailed information on specific topics, see our documentation:
 
 **Solutions**:
 - **Run upload in Azure**: See [Azure Deployments](#azure-deployments)
-
+- **Adjust batch size**: Adjust the MasterDataManifestSubmissionBatchSize value to increae the number of manifests submitted in a single workflow request.
 
 ### 3. File Upload - Metadata Issues
 **Symptoms**: The file is uploaded and metadata is created, but /v2/records/{id} returns 404

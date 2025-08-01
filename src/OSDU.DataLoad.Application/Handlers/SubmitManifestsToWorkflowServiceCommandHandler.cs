@@ -4,6 +4,7 @@ using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
 using OSDU.DataLoad.Domain.Interfaces;
 using System.Text.Json;
+using System.Threading;
 
 namespace OSDU.DataLoad.Application.Handlers;
 
@@ -166,6 +167,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                             successfulInType++;
                             _logger.LogInformation("✓ Successfully submitted manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}", 
                                 totalProcessed, totalManifestCount, progressPercentage, fileName);
+                            await CheckWorkflowStatusAsync(ingestRequest, result.RunId, cancellationToken);
                         }
                         else
                         {
@@ -226,6 +228,64 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 Message = "Manifest submission failed due to unexpected error",
                 ErrorDetails = ex.Message
             };
+        }
+    }
+
+    private async Task CheckWorkflowStatusAsync(object request, string runId, CancellationToken cancellationToken)
+    {
+        // Poll workflow status until completion (matching Python behavior)
+        const int pollingIntervalSeconds = 5;
+        const int timeoutSeconds = 120;
+        var maxAttempts = timeoutSeconds / pollingIntervalSeconds;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning("Operation was cancelled during workflow polling");
+                return;
+            }
+
+            // Wait before checking status (except for first check)
+            if (attempt > 0)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds), cancellationToken);
+            }
+
+            try
+            {
+                var status = await _osduService.GetWorkflowStatusAsync(runId, cancellationToken);
+
+                _logger.LogInformation("Workflow {RunId} status check {Attempt}/{MaxAttempts}: {Status}",
+                    runId, attempt + 1, maxAttempts, status.Status);
+
+                if (!status.IsRunning)
+                {
+                    if (status.IsFinished)
+                    {
+                        _logger.LogInformation("Workflow {RunId} completed successfully", runId);
+                    }
+                    else if (status.IsFailed)
+                    {
+                        var serializeOptions = new JsonSerializerOptions
+                        {
+                            PropertyNamingPolicy = null, // Preserve original property names
+                            WriteIndented = false
+                        };
+                        var json = JsonSerializer.Serialize(request, serializeOptions);
+                        _logger.LogError("Workflow {RunId} failed with status: {Status}, Request: {request}", runId, status.Status, json);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Workflow {RunId} in unexpected non-running state: {Status}", runId, status.Status);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error checking workflow status for {RunId}, attempt {Attempt}/{MaxAttempts}",
+                    runId, attempt + 1, maxAttempts);
+            }
         }
     }
 }

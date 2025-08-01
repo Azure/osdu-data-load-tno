@@ -1,6 +1,16 @@
 # Configuration Guide
 
-This document provides comprehensive configuration information for the OSDU Data Load TNO application. There are different methods for setting the configuration values:
+This document provides comprehensive configuration information for the OSDU Data Load TNO application. 
+
+## Batching Configuration
+
+The following master data types are submitted to the workflow service in batches. The batch size can be configured with OSDU_MasterDataManifestSubmissionBatchSize. The default is 25.
+
+- MiscMasterData 
+- Well
+- Wellbores;
+
+There are different methods for setting the configuration values:
 
 ## Environment Variables
 
@@ -66,8 +76,7 @@ export OSDU_TestDataUrl="https://community.opengroup.org/osdu/data/open-test-dat
     "UserEmail": "your-object-id",
     "RetryCount": 3,
     "RetryDelay": "00:00:02",
-    "BatchSize": 500,
-    "RequestTimeoutMs": 30000,
+    "MasterDataManifestSubmissionBatchSize": 25,
     "TestDataUrl": "https://community.opengroup.org/osdu/data/open-test-data/-/archive/master/open-test-data-master.zip"
   }
 }

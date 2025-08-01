@@ -32,9 +32,7 @@ public class OsduConfiguration
     public string UserEmail { get; set; } = string.Empty;
     public int RetryCount { get; set; } = 3;
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
-    public int BatchSize { get; set; } = 500;
-    public int RequestTimeoutMs { get; set; } = 30000;
-    public int FileUploadTimeoutMs { get; set; } = 300000; // 5 minutes for file uploads
+    public int MasterDataManifestSubmissionBatchSize { get; set; } = 25;
     public string TestDataUrl { get; set; } = string.Empty;
     
     /// <summary>
