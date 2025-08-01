@@ -64,5 +64,8 @@ WORKDIR /app
 # Copy the published application
 COPY --from=build /app/publish .
 
+# Copy generate-manifest-scripts directory to the parent directory level (same as local development)
+COPY --from=build /app/generate-manifest-scripts /generate-manifest-scripts/
+
 # Set the entry point
 ENTRYPOINT ["dotnet", "OSDU.DataLoad.Console.dll"]
