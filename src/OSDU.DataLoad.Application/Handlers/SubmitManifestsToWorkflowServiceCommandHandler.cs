@@ -471,12 +471,6 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 return;
             }
 
-            // Wait before checking status (except for first check)
-            if (attempt > 0)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds), cancellationToken);
-            }
-
             try
             {
                 var status = await _osduService.GetWorkflowStatusAsync(runId, cancellationToken);
@@ -506,13 +500,28 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                     }
                     return;
                 }
+
+                // Only delay if we're going to check again (not on the last attempt)
+                if (attempt < maxAttempts - 1)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds), cancellationToken);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Timed out checking workflow status for {RunId}, attempt {Attempt}/{MaxAttempts}",
+                _logger.LogWarning(ex, "Error checking workflow status for {RunId}, attempt {Attempt}/{MaxAttempts}",
                     runId, attempt + 1, maxAttempts);
+
+                // Only delay if we're going to try again (not on the last attempt)
+                if (attempt < maxAttempts - 1)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds), cancellationToken);
+                }
             }
         }
+
+        // If we get here, we've exhausted all attempts without a final status
+        _logger.LogWarning("Workflow {RunId} status polling timed out after {MaxAttempts} attempts", runId, maxAttempts);
     }
 
     private class ProcessingResult
