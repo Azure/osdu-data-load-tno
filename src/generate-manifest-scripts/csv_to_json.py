@@ -431,118 +431,29 @@ def add_required_fields(ldm, required_template):
 
 
 def set_acl_values(manifest, acl_viewer=None, acl_owner=None):
-    """Set ACL values in the manifest"""
+    """Set ACL values in the manifest using lowercase 'acl' key only"""
     if not isinstance(manifest, dict):
         return
-        
-    # If either ACL parameter is provided, we need to set up the ACL section
-    if acl_viewer or acl_owner:
-        
-        # Remove any existing ACL keys (both uppercase and lowercase) to avoid duplicates
-        acl_key = 'Acl'  # We'll use uppercase consistently
-        
-        if 'Acl' in manifest:
-            del manifest['Acl']
-        if 'acl' in manifest:
-            del manifest['acl']
-        
-        logging.info(f"Creating new '{acl_key}' key")
-        
-        # Create a completely new ACL object
-        acl = {}
-        manifest[acl_key] = acl
-        
-        # Set viewers if provided
-        if acl_viewer:
-            acl['Viewers'] = [acl_viewer]
-        
-        # Set owners if provided
-        if acl_owner:
-            acl['Owners'] = [acl_owner]
 
-    # Log final ACL state
-    if 'Acl' in manifest:
-        final_acl = manifest['Acl']
-    elif 'acl' in manifest:
-        final_acl = manifest['acl']
+    # Remove any existing ACL section to avoid duplicates
+    manifest.pop('acl', None)
 
+    acl = {}
+    manifest['acl'] = acl
+
+    if acl_viewer:
+        acl['viewers'] = [acl_viewer]
+    if acl_owner:
+        acl['owners'] = [acl_owner]
 
 def set_legal_tag(manifest, legal_tag):
-    """Set legal tag in the manifest"""
+    """Set legal tag in the manifest with correct casing"""
     if not isinstance(manifest, dict):
         return
-        
-    # Check for existing legal object (try both cases)
-    legal = None
-    legal_key = None
-    
-    if 'Legal' in manifest:
-        legal = manifest['Legal']
-        legal_key = 'Legal'
-    elif 'legal' in manifest:
-        legal = manifest['legal']
-        legal_key = 'legal'
-    else:
-        # Create new Legal object with capitalized key to match required template
-        legal = {}
-        legal_key = 'Legal'
-        manifest[legal_key] = legal
-    
-    if not isinstance(legal, dict):
-        legal = {}
-        manifest[legal_key] = legal
-    
-    # Set legal tags (check for both cases)
-    legal_tags = None
-    legal_tags_key = None
-    
-    if 'LegalTags' in legal:
-        legal_tags = legal['LegalTags']
-        legal_tags_key = 'LegalTags'
-    elif 'legaltags' in legal:
-        legal_tags = legal['legaltags']
-        legal_tags_key = 'legaltags'
-    elif 'Tags' in legal:
-        legal_tags = legal['Tags']
-        legal_tags_key = 'Tags'
-    elif 'tags' in legal:
-        legal_tags = legal['tags']
-        legal_tags_key = 'tags'
-    else:
-        # Use capitalized key to match required template
-        legal_tags = []
-        legal_tags_key = 'LegalTags'
-        legal[legal_tags_key] = legal_tags
-    
-    if not isinstance(legal_tags, list):
-        legal_tags = []
-        legal[legal_tags_key] = legal_tags
-        
-    if legal_tag not in legal_tags:
-        legal_tags.append(legal_tag)
-    
-    # Set OtherRelevantDataCountries to "US" (check for both cases)
-    other_countries = None
-    other_countries_key = None
-    
-    if 'OtherRelevantDataCountries' in legal:
-        other_countries = legal['OtherRelevantDataCountries']
-        other_countries_key = 'OtherRelevantDataCountries'
-    elif 'otherrelevantdatacountries' in legal:
-        other_countries = legal['otherrelevantdatacountries']
-        other_countries_key = 'otherrelevantdatacountries'
-    else:
-        # Use capitalized key to match required template
-        other_countries = []
-        other_countries_key = 'OtherRelevantDataCountries'
-        legal[other_countries_key] = other_countries
-    
-    if not isinstance(other_countries, list):
-        other_countries = []
-        legal[other_countries_key] = other_countries
-        
-    if "US" not in other_countries:
-        other_countries.append("US")
+
+    legal = manifest.get('legal')
+    legal['legaltags'] = [legal_tag]
+    legal['otherRelevantDataCountries'] = ["US"]
 
 
 def create_manifest_from_row(root_template, required_template,
@@ -802,5 +713,3 @@ def create_manifest_from_csv(input_csv, template_json, output_path,
         logging.info("Generated {} load manifests.".format(len(processed)))
         if empty_row_count > 0:
             logging.info("Skipped {} empty rows.".format(empty_row_count))
-
-
