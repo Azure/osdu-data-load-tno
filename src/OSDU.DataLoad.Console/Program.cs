@@ -13,38 +13,38 @@ namespace OSDU.DataLoad.Console;
 /// </summary>
 public class Program
 {
+    private static bool _hasRunOnce = false;
+    private static readonly object _lockObject = new object();
+
     public static async Task<int> Main(string[] args)
     {
         IHost? host = null;
-        
+
         try
         {
             host = CreateHostBuilder(args).Build();
-            
+
             using var scope = host.Services.CreateScope();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            
-            logger.LogInformation("OSDU Data Load TNO starting - Process ID: {ProcessId}, Args: [{Args}]", 
+
+            logger.LogInformation("OSDU Data Load TNO starting - Process ID: {ProcessId}, Args: [{Args}]",
                 Environment.ProcessId, string.Join(", ", args));
-            
+
             // Set up global exception handlers for container resilience
             AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
             {
                 logger.LogCritical("Unhandled exception occurred: {Exception}", e.ExceptionObject);
             };
-            
+
             TaskScheduler.UnobservedTaskException += (sender, e) =>
             {
                 logger.LogError("Unobserved task exception: {Exception}", e.Exception);
                 e.SetObserved(); // Prevent process termination
             };
-            
-            var app = scope.ServiceProvider.GetRequiredService<DataLoadApplication>();
-            
-            var result = await app.RunAsync(args);
-            
-            logger.LogInformation("OSDU Data Load TNO completed with exit code: {ExitCode}", result);
-            return result;
+
+            // Always run once then wait forever (container-friendly)
+            await RunOnceAndWait(scope.ServiceProvider, args, logger);
+            return 0; // Should never reach here due to infinite wait
         }
         catch (OperationCanceledException ex)
         {
@@ -58,7 +58,7 @@ public class Program
             // Prevent container crash by catching all exceptions
             var logger = host?.Services?.GetService<ILogger<Program>>();
             logger?.LogCritical(ex, "Fatal error occurred - preventing container crash: {Message}", ex.Message);
-            
+
             // Return non-zero exit code but don't let the process crash
             return 1;
         }
@@ -77,6 +77,89 @@ public class Program
         }
     }
 
+    private static async Task RunOnceAndWait(IServiceProvider serviceProvider, string[] args, ILogger logger)
+    {
+        lock (_lockObject)
+        {
+            if (_hasRunOnce)
+            {
+                logger.LogInformation("Application has already run once. Waiting indefinitely...");
+                return;
+            }
+            _hasRunOnce = true;
+        }
+
+        try
+        {
+            logger.LogInformation("Running OSDU Data Load application...");
+
+            var app = serviceProvider.GetRequiredService<DataLoadApplication>();
+            var result = await app.RunAsync(args);
+
+            logger.LogInformation("OSDU Data Load TNO completed with exit code: {ExitCode}", result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during application execution. Container will still wait indefinitely to prevent restart.");
+        }
+
+        // Detect if running in container or locally
+        var isRunningInContainer = IsRunningInContainer();
+
+        if (isRunningInContainer)
+        {
+            // Container mode - wait forever to prevent container restart
+            logger.LogInformation("Application execution completed. Container will now wait indefinitely. Send SIGTERM to gracefully shutdown.");
+
+            // Create a cancellation token that will be cancelled on SIGTERM/SIGINT
+            using var cts = new CancellationTokenSource();
+
+            // Handle shutdown signals gracefully
+            System.Console.CancelKeyPress += (sender, e) =>
+            {
+                logger.LogInformation("Received SIGINT, initiating graceful shutdown...");
+                e.Cancel = true; // Prevent immediate termination
+                cts.Cancel();
+            };
+
+            // For container environments, also handle SIGTERM
+            AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
+            {
+                logger.LogInformation("Received SIGTERM, initiating graceful shutdown...");
+                cts.Cancel();
+            };
+
+            try
+            {
+                // Wait indefinitely or until cancellation
+                await Task.Delay(Timeout.Infinite, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation("Graceful shutdown initiated. Exiting...");
+            }
+        }
+        else
+        {
+            // Local development mode - wait for user input
+            logger.LogInformation("Application execution completed.");
+            System.Console.WriteLine("\nPress any key to quit...");
+            System.Console.ReadKey(true);
+            logger.LogInformation("User requested exit. Shutting down...");
+        }
+    }
+
+    private static bool IsRunningInContainer()
+    {
+        // Check common container environment indicators
+        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")) ||
+               !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")) ||
+               !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CONTAINER_NAME")) ||
+               File.Exists("/.dockerenv") ||
+               Environment.GetEnvironmentVariable("HOSTNAME")?.StartsWith("docker-") == true ||
+               Environment.OSVersion.Platform == PlatformID.Unix && Environment.UserName == "root";
+    }
+
     private static IHostBuilder CreateHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((context, config) =>
@@ -93,7 +176,7 @@ public class Program
                 {
                     // First bind from Osdu section in appsettings.json
                     context.Configuration.GetSection("Osdu").Bind(osduConfig);
-                    
+
                     // Then override with environment variables if they exist
                     if (!string.IsNullOrEmpty(context.Configuration["BaseUrl"]))
                         osduConfig.BaseUrl = context.Configuration["BaseUrl"]!;
@@ -118,7 +201,7 @@ public class Program
                 // Path configuration - centralized file and directory paths
                 services.AddSingleton<PathConfiguration>(provider =>
                 {
-                    var basePath = context.Configuration["BasePath"] ?? 
+                    var basePath = context.Configuration["BasePath"] ??
                                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
                     return new PathConfiguration { BaseDataPath = basePath };
                 });
@@ -144,30 +227,30 @@ public class Program
                         // Enable retries and connection pooling for container resilience
                         MaxConnectionsPerServer = 10,
                     });
-                    
+
                 services.AddHttpClient(); // For general HTTP operations
-                
+
                 // Application
                 services.AddScoped<DataLoadApplication>();
             })
             .ConfigureLogging((context, logging) =>
             {
                 logging.ClearProviders();
-                
+
                 // Container-friendly logging
                 logging.AddSimpleConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
                 });
-                
+
                 // Add structured logging for container environments
                 logging.AddJsonConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
                 });
-                
+
                 if (context.HostingEnvironment.IsDevelopment())
                 {
                     logging.AddDebug();
@@ -178,7 +261,7 @@ public class Program
                     // Production/container environment
                     logging.SetMinimumLevel(LogLevel.Information);
                 }
-                
+
                 // Always log critical errors regardless of environment
                 logging.AddFilter("OSDU.DataLoad", LogLevel.Information);
                 logging.AddFilter("Microsoft", LogLevel.Warning);

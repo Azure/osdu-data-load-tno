@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using OSDU.DataLoad.Application.Commands;
 using OSDU.DataLoad.Domain.Entities;
 using OSDU.DataLoad.Domain.Interfaces;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Threading;
 
@@ -231,12 +232,21 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
     {
         var batchSize = _configuration.MasterDataManifestSubmissionBatchSize;
 
-        // Collect all MasterData records from all manifest files
-        var allMasterDataRecords = new List<object>();
-        var allProcessedFiles = new List<string>();
+        // Collect all MasterData records from all manifest files in parallel
+        var allMasterDataRecords = new ConcurrentBag<object>();
+        var allProcessedFiles = new ConcurrentBag<string>();
+        var processingErrors = new ConcurrentBag<string>();
+        
         _logger.LogInformation("Preparing batch request...this may take a few min");
 
-        foreach (var manifestFile in manifestFiles)
+        // Read all manifest files in parallel
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Environment.ProcessorCount * 8,
+            CancellationToken = cancellationToken
+        };
+
+        await Parallel.ForEachAsync(manifestFiles, options, async (manifestFile, ct) =>
         {
             var fileName = Path.GetFileName(manifestFile);
             allProcessedFiles.Add(fileName);
@@ -244,7 +254,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
             try
             {
                 // Read and parse the manifest file
-                var manifestContent = await File.ReadAllTextAsync(manifestFile, cancellationToken);
+                var manifestContent = await File.ReadAllTextAsync(manifestFile, ct);
                 var manifest = JsonSerializer.Deserialize<JsonElement>(manifestContent);
 
                 if (manifest.TryGetProperty("MasterData", out var masterDataProperty) &&
@@ -258,30 +268,42 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
             }
             catch (Exception ex)
             {
+                processingErrors.Add($"Error reading manifest file {fileName}: {ex.Message}");
                 _logger.LogError(ex, "Error reading manifest file for batching: {FileName}", fileName);
             }
+        });
+
+        // Convert to list for batching
+        var recordsList = allMasterDataRecords.ToList();
+        
+        _logger.LogInformation("Collected {TotalRecords} MasterData records from {FileCount} manifest files for {DataType} (batch size: {BatchSize})",
+            recordsList.Count, manifestFiles.Length, dataType, batchSize);
+
+        if (processingErrors.Any())
+        {
+            _logger.LogWarning("Encountered {ErrorCount} errors while reading manifest files", processingErrors.Count);
         }
 
-        _logger.LogInformation("Collected {TotalRecords} MasterData records from {FileCount} manifest files for {DataType} (batch size: {BatchSize})",
-            allMasterDataRecords.Count, manifestFiles.Length, dataType, batchSize);
-
-        // Process records in configured batches
-        var batches = allMasterDataRecords.Chunk(batchSize);
-        var batchNumber = 0;
+        // Process records in configured batches - submit batches in parallel
+        var batches = recordsList.Chunk(batchSize).ToArray();
         var processedRecords = 0;
         var successfulRecords = 0;
         var failedRecords = 0;
-        var failedManifests = new List<string>();
+        var failedManifests = new ConcurrentBag<string>();
 
-        foreach (var batch in batches)
+        // Process batches in parallel
+        var batchResults = new ConcurrentBag<(int BatchNumber, int RecordsInBatch, bool Success, string ErrorMessage)>();
+
+        await Parallel.ForEachAsync(batches.Select((batch, index) => new { Batch = batch, Index = index }), options, async (batchInfo, ct) =>
         {
-            batchNumber++;
+            var batchNumber = batchInfo.Index + 1;
+            var batch = batchInfo.Batch;
             var recordsInBatch = batch.Length;
 
             try
             {
-                _logger.LogInformation("Processing batch {BatchNumber} for {DataType}: {RecordsInBatch} records (LoadingSequence: {LoadingSequence})",
-                    batchNumber, dataType, recordsInBatch, sequenceIndex + 1);
+                _logger.LogInformation("Processing batch {BatchNumber}/{TotalBatches} for {DataType}: {RecordsInBatch} records (LoadingSequence: {LoadingSequence})",
+                    batchNumber, batches.Length, dataType, recordsInBatch, sequenceIndex + 1);
 
                 // Create batched manifest
                 var batchedManifest = new Dictionary<string, object>
@@ -305,21 +327,20 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 };
 
                 // Submit this batch to the workflow service
-                var result = await _osduService.SubmitWorkflowAsync(ingestRequest, cancellationToken);
+                var result = await _osduService.SubmitWorkflowAsync(ingestRequest, ct);
 
                 if (result.IsSuccess)
                 {
-                    successfulRecords += recordsInBatch;
-                    _logger.LogInformation("✓ Successfully submitted batch {BatchNumber} for {DataType}: {RecordsInBatch} records",
-                        batchNumber, dataType, recordsInBatch);
+                    batchResults.Add((batchNumber, recordsInBatch, true, string.Empty));
+                    _logger.LogInformation("✓ Successfully submitted batch {BatchNumber}/{TotalBatches} for {DataType}: {RecordsInBatch} records",
+                        batchNumber, batches.Length, dataType, recordsInBatch);
 
                     // Start workflow status checking in background (fire-and-forget)
                     _ = Task.Run(async () =>
                     {
                         try
                         {
-                            // Create a new cancellation token that won't be cancelled when main operation completes
-                            using var backgroundCts = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // 5 minute timeout
+                            using var backgroundCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                             await CheckWorkflowStatusAsync(ingestRequest, result.RunId, backgroundCts.Token);
                         }
                         catch (Exception ex)
@@ -330,35 +351,47 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 }
                 else
                 {
-                    failedRecords += recordsInBatch;
+                    batchResults.Add((batchNumber, recordsInBatch, false, result.ErrorDetails));
                     failedManifests.Add($"{dataType}/batch-{batchNumber} ({recordsInBatch} records) (seq:{sequenceIndex + 1})");
-                    _logger.LogError("✗ Failed to submit batch {BatchNumber} for {DataType}: {RecordsInBatch} records - {Error}",
-                        batchNumber, dataType, recordsInBatch, result.ErrorDetails);
+                    _logger.LogError("✗ Failed to submit batch {BatchNumber}/{TotalBatches} for {DataType}: {RecordsInBatch} records - {Error}",
+                        batchNumber, batches.Length, dataType, recordsInBatch, result.ErrorDetails);
                 }
-
-                processedRecords += recordsInBatch;
             }
             catch (Exception ex)
             {
-                failedRecords += recordsInBatch;
+                batchResults.Add((batchNumber, recordsInBatch, false, ex.Message));
                 failedManifests.Add($"{dataType}/batch-{batchNumber} ({recordsInBatch} records) (seq:{sequenceIndex + 1})");
-                _logger.LogError(ex, "✗ Error processing batch {BatchNumber} for {DataType}: {RecordsInBatch} records",
-                    batchNumber, dataType, recordsInBatch);
-                processedRecords += recordsInBatch;
+                _logger.LogError(ex, "✗ Error processing batch {BatchNumber}/{TotalBatches} for {DataType}: {RecordsInBatch} records",
+                    batchNumber, batches.Length, dataType, recordsInBatch);
+            }
+        });
+
+        // Aggregate results
+        foreach (var result in batchResults)
+        {
+            processedRecords += result.RecordsInBatch;
+            if (result.Success)
+            {
+                successfulRecords += result.RecordsInBatch;
+            }
+            else
+            {
+                failedRecords += result.RecordsInBatch;
             }
         }
 
         _logger.LogInformation("Completed batching for {DataType}: {FileCount} files containing {TotalRecords} records processed in {BatchCount} batches",
-            dataType, allProcessedFiles.Count, allMasterDataRecords.Count, batchNumber);
+            dataType, allProcessedFiles.Count, recordsList.Count, batches.Length);
 
         return new ProcessingResult
         {
             ProcessedRecords = processedRecords,
             SuccessfulRecords = successfulRecords,
             FailedRecords = failedRecords,
-            FailedManifests = failedManifests
+            FailedManifests = failedManifests.ToList()
         };
     }
+
 
     private async Task<ProcessingResult> ProcessIndividualManifestsAsync(
         TnoDataType dataType,
@@ -372,23 +405,35 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
         var processedRecords = 0;
         var successfulRecords = 0;
         var failedRecords = 0;
-        var failedManifests = new List<string>();
+        var failedManifests = new ConcurrentBag<string>();
 
-        foreach (var manifestFile in manifestFiles)
+        // Process manifests in parallel
+        var options = new ParallelOptions
         {
-            processedRecords++;
+            MaxDegreeOfParallelism = Environment.ProcessorCount * 8,
+            CancellationToken = cancellationToken
+        };
+
+        var results = new ConcurrentBag<(bool Success, string FileName, string ErrorMessage)>();
+        var processedCount = 0;
+
+        await Parallel.ForEachAsync(manifestFiles.Select((file, index) => new { File = file, Index = index }), options, async (fileInfo, ct) =>
+        {
+            var manifestFile = fileInfo.File;
+            var fileIndex = fileInfo.Index;
             var fileName = Path.GetFileName(manifestFile);
+            var currentProcessed = Interlocked.Increment(ref processedCount);
 
             // Calculate overall progress percentage
-            var progressPercentage = (double)(currentTotalProcessed + processedRecords) / totalManifestCount * 100;
+            var progressPercentage = (double)(currentTotalProcessed + currentProcessed) / totalManifestCount * 100;
 
             try
             {
                 _logger.LogInformation("Processing manifest [{Current}/{Total}] ({Progress:F1}%): {FileName} for {DataType} (LoadingSequence: {LoadingSequence})",
-                    currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName, dataType, sequenceIndex + 1);
+                    currentTotalProcessed + currentProcessed, totalManifestCount, progressPercentage, fileName, dataType, sequenceIndex + 1);
 
                 // Read and parse the manifest file
-                var manifestContent = await File.ReadAllTextAsync(manifestFile, cancellationToken);
+                var manifestContent = await File.ReadAllTextAsync(manifestFile, ct);
                 var manifest = JsonSerializer.Deserialize<Dictionary<string, object>>(manifestContent);
                 manifest["kind"] = "osdu:wks:Manifest:1.0.0";
 
@@ -407,21 +452,20 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 };
 
                 // Submit this individual manifest to the workflow service
-                var result = await _osduService.SubmitWorkflowAsync(ingestRequest, cancellationToken);
+                var result = await _osduService.SubmitWorkflowAsync(ingestRequest, ct);
 
                 if (result.IsSuccess)
                 {
-                    successfulRecords++;
+                    results.Add((true, fileName, string.Empty));
                     _logger.LogInformation("✓ Successfully submitted manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}",
-                        currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName);
+                        currentTotalProcessed + currentProcessed, totalManifestCount, progressPercentage, fileName);
 
                     // Start workflow status checking in background (fire-and-forget)
                     _ = Task.Run(async () =>
                     {
                         try
                         {
-                            // Create a new cancellation token that won't be cancelled when main operation completes
-                            using var backgroundCts = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // 5 minute timeout
+                            using var backgroundCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                             await CheckWorkflowStatusAsync(ingestRequest, result.RunId, backgroundCts.Token);
                         }
                         catch (Exception ex)
@@ -432,18 +476,32 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
                 }
                 else
                 {
-                    failedRecords++;
+                    results.Add((false, fileName, result.ErrorDetails));
                     failedManifests.Add($"{dataType}/{fileName} (seq:{sequenceIndex + 1})");
                     _logger.LogError("✗ Failed to submit manifest [{Current}/{Total}] ({Progress:F1}%): {FileName} - {Error}",
-                        currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName, result.ErrorDetails);
+                        currentTotalProcessed + currentProcessed, totalManifestCount, progressPercentage, fileName, result.ErrorDetails);
                 }
             }
             catch (Exception ex)
             {
-                failedRecords++;
+                results.Add((false, fileName, ex.Message));
                 failedManifests.Add($"{dataType}/{fileName} (seq:{sequenceIndex + 1})");
                 _logger.LogError(ex, "✗ Error processing manifest [{Current}/{Total}] ({Progress:F1}%): {FileName}",
-                    currentTotalProcessed + processedRecords, totalManifestCount, progressPercentage, fileName);
+                    currentTotalProcessed + currentProcessed, totalManifestCount, progressPercentage, fileName);
+            }
+        });
+
+        // Aggregate results
+        foreach (var result in results)
+        {
+            processedRecords++;
+            if (result.Success)
+            {
+                successfulRecords++;
+            }
+            else
+            {
+                failedRecords++;
             }
         }
 
@@ -452,7 +510,7 @@ public class SubmitManifestsToWorkflowServiceCommandHandler : IRequestHandler<Su
             ProcessedRecords = processedRecords,
             SuccessfulRecords = successfulRecords,
             FailedRecords = failedRecords,
-            FailedManifests = failedManifests
+            FailedManifests = failedManifests.ToList()
         };
     }
 
