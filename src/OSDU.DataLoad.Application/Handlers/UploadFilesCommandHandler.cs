@@ -168,7 +168,7 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
 
             var options = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Environment.ProcessorCount * 4,
+                MaxDegreeOfParallelism = Environment.ProcessorCount * 8,
                 CancellationToken = cancellationToken
             };
 
