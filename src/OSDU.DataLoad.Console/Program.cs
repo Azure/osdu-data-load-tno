@@ -196,8 +196,6 @@ public class Program
                         osduConfig.AclViewer = context.Configuration["AclViewer"]!;
                     if (!string.IsNullOrEmpty(context.Configuration["AclOwner"]))
                         osduConfig.AclOwner = context.Configuration["AclOwner"]!;
-                    if (!string.IsNullOrEmpty(context.Configuration["UserEmail"]))
-                        osduConfig.UserEmail = context.Configuration["UserEmail"]!;
                     if (!string.IsNullOrEmpty(context.Configuration["TestDataUrl"]))
                         osduConfig.TestDataUrl = context.Configuration["TestDataUrl"]!;
                 });

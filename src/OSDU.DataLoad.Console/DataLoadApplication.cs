@@ -361,7 +361,6 @@ public class DataLoadApplication
         var legalTag = GetConfigValue("LegalTag");
         var aclViewer = GetConfigValue("AclViewer");
         var aclOwner = GetConfigValue("AclOwner");
-        var userEmail = GetConfigValue("UserEmail");
 
         _logger.LogInformation("BaseUrl: {Status} (REQUIRED)", IsConfigured(baseUrl) ? "Configured" : "Not configured");
         _logger.LogInformation("TenantId: {Status} (REQUIRED)", IsConfigured(tenantId) ? "Configured" : "Not configured");
@@ -370,7 +369,6 @@ public class DataLoadApplication
         _logger.LogInformation("LegalTag: {Status} (REQUIRED)", IsConfigured(legalTag) ? "Configured" : "Not configured");
         _logger.LogInformation("AclViewer: {Status}", IsConfigured(aclViewer) ? "Configured" : "Not configured");
         _logger.LogInformation("AclOwner: {Status} (REQUIRED)", IsConfigured(aclOwner) ? "Configured" : "Not configured");
-        _logger.LogInformation("UserEmail: {Status}", IsConfigured(userEmail) ? "Configured (user will be added to ops group)" : "Not configured (user authorization setup will be skipped)");
     }
 
     private async Task LoadAllDataAsync(string source)

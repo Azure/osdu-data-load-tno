@@ -29,7 +29,6 @@ public class OsduConfiguration
     public string LegalTag { get; set; } = string.Empty;
     public string AclViewer { get; set; } = string.Empty;
     public string AclOwner { get; set; } = string.Empty;
-    public string UserEmail { get; set; } = string.Empty;
     public int RetryCount { get; set; } = 3;
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
     public int MasterDataManifestSubmissionBatchSize { get; set; } = 25;
