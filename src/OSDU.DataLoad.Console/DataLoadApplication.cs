@@ -34,30 +34,28 @@ public class DataLoadApplication
             int exitCode;
             if (args.Length == 0)
             {
-            // Default behavior: download data if needed, then load it
-            exitCode = await HandleDefaultCommand();
+                // Default behavior: download data if needed, then load it
+                exitCode = await HandleDefaultCommand();
             }
             else
             {
-            var command = args[0].ToLowerInvariant();
+                var command = args[0].ToLowerInvariant();
 
-            exitCode = command switch
-            {
-                "load" => await HandleLoadCommand(args),
-                "download" => await HandleDownloadCommand(args),
-                "help" or "--help" or "-h" => ShowHelp(),
-                _ => ShowHelp("Unknown command: " + command)
-            };
+                exitCode = command switch
+                {
+                    "load" => await HandleLoadCommand(args),
+                    "download" => await HandleDownloadCommand(args),
+                    "help" or "--help" or "-h" => ShowHelp(),
+                    _ => ShowHelp("Unknown command: " + command)
+                };
             }
 
-            // Sleep forever if completed successfully
-            await Task.Delay(Timeout.Infinite);
+            _logger.LogInformation("Application completed with exit code: {ExitCode}", exitCode);
             return exitCode;
         }
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Unexpected application error occurred");
-            await Task.Delay(Timeout.Infinite);
             return 99; // General application error
         }
     }
@@ -363,7 +361,6 @@ public class DataLoadApplication
         var legalTag = GetConfigValue("LegalTag");
         var aclViewer = GetConfigValue("AclViewer");
         var aclOwner = GetConfigValue("AclOwner");
-        var userEmail = GetConfigValue("UserEmail");
 
         _logger.LogInformation("BaseUrl: {Status} (REQUIRED)", IsConfigured(baseUrl) ? "Configured" : "Not configured");
         _logger.LogInformation("TenantId: {Status} (REQUIRED)", IsConfigured(tenantId) ? "Configured" : "Not configured");
@@ -372,7 +369,6 @@ public class DataLoadApplication
         _logger.LogInformation("LegalTag: {Status} (REQUIRED)", IsConfigured(legalTag) ? "Configured" : "Not configured");
         _logger.LogInformation("AclViewer: {Status}", IsConfigured(aclViewer) ? "Configured" : "Not configured");
         _logger.LogInformation("AclOwner: {Status} (REQUIRED)", IsConfigured(aclOwner) ? "Configured" : "Not configured");
-        _logger.LogInformation("UserEmail: {Status}", IsConfigured(userEmail) ? "Configured (user will be added to ops group)" : "Not configured (user authorization setup will be skipped)");
     }
 
     private async Task LoadAllDataAsync(string source)
@@ -400,21 +396,21 @@ public class DataLoadApplication
             var overallSuccess = true;
             var startTime = DateTime.UtcNow;
 
-            //// Step 1: Create Legal Tag
+            // Step 1: Create Legal Tag
             _logger.LogInformation("Step 1: Creating legal tag");
             var legalTagResult = await _mediator.Send(new CreateLegalTagCommand
             {
-                LegalTagName = legalTag
+               LegalTagName = legalTag
             });
             DisplayStepResult("Legal Tag Creation", legalTagResult);
             overallSuccess = overallSuccess && legalTagResult.IsSuccess;
 
             if (!legalTagResult.IsSuccess)
             {
-                _logger.LogError("Creating legal tag failed. Check for authorization issues. User must have users.datalake.ops and users@<data partition>.dataservices.energy roles.");
+               _logger.LogError("Creating legal tag failed. Check for authorization issues. User must have users.datalake.ops and users@<data partition>.dataservices.energy roles.");
             }
 
-            //// Step 2: Upload Dataset Files 
+            // Step 2: Upload Dataset Files 
             _logger.LogInformation("Step 2: Uploading dataset files from configured directories");
             var uploadResult = await _mediator.Send(new UploadFilesCommand(source, Path.Combine(source, "output")));
             DisplayStepResult("Dataset File Upload", uploadResult);
@@ -422,25 +418,25 @@ public class DataLoadApplication
 
             if (!uploadResult.IsSuccess)
             {
-                _logger.LogError("Uploading dataset files was not successful. Check logs for how many files failed.");
+               _logger.LogError("Uploading dataset files was not successful. Check logs for how many files failed.");
             }
 
-            //// Step 3: Generate Manifests
+            // Step 3: Generate Manifests
             _logger.LogInformation("Step 3: Generating manifests (datasets uploaded, can now generate work products)");
             var manifestResult = await _mediator.Send(new GenerateManifestsCommand
             {
-                SourceDataPath = source,
-                OutputPath = source,
-                DataPartition = dataPartition,
-                LegalTag = legalTag,
-                AclViewer = aclViewer,
-                AclOwner = aclOwner
+               SourceDataPath = source,
+               OutputPath = source,
+               DataPartition = dataPartition,
+               LegalTag = legalTag,
+               AclViewer = aclViewer,
+               AclOwner = aclOwner
             });
             DisplayStepResult("Manifest Generation", manifestResult);
             overallSuccess = overallSuccess && manifestResult.IsSuccess;
             if (!manifestResult.IsSuccess)
             {
-                _logger.LogError("Generating manifests was not successful. Check input directory paths.");
+               _logger.LogError("Generating manifests was not successful. Check input directory paths.");
             }
 
             // Step 4: Submit Manifests to Workflow Service
@@ -463,7 +459,7 @@ public class DataLoadApplication
 
             // Display overall results
             var totalDuration = DateTime.UtcNow - startTime;
-            _logger.LogInformation("Finished - Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", overallSuccess ? "Success" : "Failed", totalDuration);
+            _logger.LogInformation("Data Load Finished - Overall Result: {Result}, Total Duration: {Duration:mm\\:ss}", overallSuccess ? "Success" : "Failed", totalDuration);
         }
         catch (Exception ex)
         {

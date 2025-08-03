@@ -13,6 +13,9 @@ namespace OSDU.DataLoad.Console;
 /// </summary>
 public class Program
 {
+    private static bool _hasRunOnce = false;
+    private static readonly object _lockObject = new object();
+
     public static async Task<int> Main(string[] args)
     {
         IHost? host = null;
@@ -38,13 +41,10 @@ public class Program
                 logger.LogError("Unobserved task exception: {Exception}", e.Exception);
                 e.SetObserved(); // Prevent process termination
             };
-            
-            var app = scope.ServiceProvider.GetRequiredService<DataLoadApplication>();
-            
-            var result = await app.RunAsync(args);
-            
-            logger.LogInformation("OSDU Data Load TNO completed with exit code: {ExitCode}", result);
-            return result;
+
+            // Always run once then wait forever (container-friendly)
+            await RunOnceAndWait(scope.ServiceProvider, args, logger);
+            return 0; // Should never reach here due to infinite wait
         }
         catch (OperationCanceledException ex)
         {
@@ -75,6 +75,93 @@ public class Program
                 logger?.LogError(ex, "Error during cleanup: {Message}", ex.Message);
             }
         }
+    }
+
+    private static async Task RunOnceAndWait(IServiceProvider serviceProvider, string[] args, ILogger logger)
+    {
+        lock (_lockObject)
+        {
+            if (_hasRunOnce)
+            {
+                logger.LogInformation("Application has already run once. Waiting indefinitely...");
+                return;
+            }
+            _hasRunOnce = true;
+        }
+
+        try
+        {
+            logger.LogInformation("Running OSDU Data Load application...");
+
+            var app = serviceProvider.GetRequiredService<DataLoadApplication>();
+            var result = await app.RunAsync(args);
+
+            logger.LogInformation("OSDU Data Load TNO completed with exit code: {ExitCode}", result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during application execution. Container will still wait indefinitely to prevent restart.");
+        }
+
+        // Detect if running in container or locally
+        var isRunningInContainer = IsRunningInContainer();
+        
+        if (isRunningInContainer)
+        {
+            // Container mode - wait forever to prevent container restart
+            logger.LogInformation("Application execution completed. Container will now wait indefinitely. Send SIGTERM to gracefully shutdown.");
+            
+            // Create a cancellation token that will be cancelled on SIGTERM/SIGINT
+            using var cts = new CancellationTokenSource();
+            
+            // Handle shutdown signals gracefully
+            System.Console.CancelKeyPress += (sender, e) =>
+            {
+                logger.LogInformation("Received SIGINT, initiating graceful shutdown...");
+                e.Cancel = true; // Prevent immediate termination
+                cts.Cancel();
+            };
+
+            // For container environments, also handle SIGTERM
+            AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
+            {
+                logger.LogInformation("Received SIGTERM, initiating graceful shutdown...");
+                cts.Cancel();
+            };
+
+            try
+            {
+                // Wait indefinitely with periodic status messages
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(60), cts.Token);
+                    logger.LogInformation("Data Load Finished - Container will now wait indefinitely. Send SIGTERM to gracefully shutdown.");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation("Graceful shutdown initiated. Exiting...");
+            }
+        }
+        else
+        {
+            // Local development mode - wait for user input
+            System.Console.WriteLine("\nApplication execution completed..");
+            System.Console.WriteLine("\nPress any key to quit...");
+            System.Console.ReadKey(true);
+            logger.LogInformation("User requested exit. Shutting down...");
+        }
+    }
+
+    private static bool IsRunningInContainer()
+    {
+        // Check common container environment indicators
+        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")) ||
+               !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")) ||
+               !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CONTAINER_NAME")) ||
+               File.Exists("/.dockerenv") ||
+               Environment.GetEnvironmentVariable("HOSTNAME")?.StartsWith("docker-") == true ||
+               Environment.OSVersion.Platform == PlatformID.Unix && Environment.UserName == "root";
     }
 
     private static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -109,8 +196,6 @@ public class Program
                         osduConfig.AclViewer = context.Configuration["AclViewer"]!;
                     if (!string.IsNullOrEmpty(context.Configuration["AclOwner"]))
                         osduConfig.AclOwner = context.Configuration["AclOwner"]!;
-                    if (!string.IsNullOrEmpty(context.Configuration["UserEmail"]))
-                        osduConfig.UserEmail = context.Configuration["UserEmail"]!;
                     if (!string.IsNullOrEmpty(context.Configuration["TestDataUrl"]))
                         osduConfig.TestDataUrl = context.Configuration["TestDataUrl"]!;
                 });

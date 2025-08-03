@@ -134,6 +134,10 @@ module osduDataloadConsole 'br/public:avm/res/app/container-app:0.8.0' = {
             value: monitoring.outputs.applicationInsightsConnectionString
           }
           {
+            name: 'DOTNET_RUNNING_IN_CONTAINER'
+            value: 'true'
+          }
+          {
             name: 'AZURE_CLIENT_ID'
             value: osduDataloadConsoleIdentity.outputs.clientId
           }
