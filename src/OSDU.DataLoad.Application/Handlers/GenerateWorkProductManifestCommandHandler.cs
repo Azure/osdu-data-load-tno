@@ -532,7 +532,6 @@ public class GenerateWorkProductManifestCommandHandler : IRequestHandler<Generat
                     {
                         legalDict["legaltags"] = new[] { legalTag };
                         legalDict["otherRelevantDataCountries"] = new[] { "US" };
-                        legalDict["status"] = "compliant";
                         sectionDict["legal"] = legalDict;
                     }
                 }
