@@ -19,23 +19,23 @@ public class Program
     public static async Task<int> Main(string[] args)
     {
         IHost? host = null;
-
+        
         try
         {
             host = CreateHostBuilder(args).Build();
-
+            
             using var scope = host.Services.CreateScope();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-            logger.LogInformation("OSDU Data Load TNO starting - Process ID: {ProcessId}, Args: [{Args}]",
+            
+            logger.LogInformation("OSDU Data Load TNO starting - Process ID: {ProcessId}, Args: [{Args}]", 
                 Environment.ProcessId, string.Join(", ", args));
-
+            
             // Set up global exception handlers for container resilience
             AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
             {
                 logger.LogCritical("Unhandled exception occurred: {Exception}", e.ExceptionObject);
             };
-
+            
             TaskScheduler.UnobservedTaskException += (sender, e) =>
             {
                 logger.LogError("Unobserved task exception: {Exception}", e.Exception);
@@ -58,7 +58,7 @@ public class Program
             // Prevent container crash by catching all exceptions
             var logger = host?.Services?.GetService<ILogger<Program>>();
             logger?.LogCritical(ex, "Fatal error occurred - preventing container crash: {Message}", ex.Message);
-
+            
             // Return non-zero exit code but don't let the process crash
             return 1;
         }
@@ -105,15 +105,15 @@ public class Program
 
         // Detect if running in container or locally
         var isRunningInContainer = IsRunningInContainer();
-
+        
         if (isRunningInContainer)
         {
             // Container mode - wait forever to prevent container restart
             logger.LogInformation("Application execution completed. Container will now wait indefinitely. Send SIGTERM to gracefully shutdown.");
-
+            
             // Create a cancellation token that will be cancelled on SIGTERM/SIGINT
             using var cts = new CancellationTokenSource();
-
+            
             // Handle shutdown signals gracefully
             System.Console.CancelKeyPress += (sender, e) =>
             {
@@ -131,8 +131,12 @@ public class Program
 
             try
             {
-                // Wait indefinitely or until cancellation
-                await Task.Delay(Timeout.Infinite, cts.Token);
+                // Wait indefinitely with periodic status messages
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(60), cts.Token);
+                    logger.LogInformation("Data Load Finished - Container will now wait indefinitely. Send SIGTERM to gracefully shutdown.");
+                }
             }
             catch (OperationCanceledException)
             {
@@ -142,7 +146,7 @@ public class Program
         else
         {
             // Local development mode - wait for user input
-            logger.LogInformation("Application execution completed.");
+            System.Console.WriteLine("\nApplication execution completed..");
             System.Console.WriteLine("\nPress any key to quit...");
             System.Console.ReadKey(true);
             logger.LogInformation("User requested exit. Shutting down...");
@@ -176,7 +180,7 @@ public class Program
                 {
                     // First bind from Osdu section in appsettings.json
                     context.Configuration.GetSection("Osdu").Bind(osduConfig);
-
+                    
                     // Then override with environment variables if they exist
                     if (!string.IsNullOrEmpty(context.Configuration["BaseUrl"]))
                         osduConfig.BaseUrl = context.Configuration["BaseUrl"]!;
@@ -201,7 +205,7 @@ public class Program
                 // Path configuration - centralized file and directory paths
                 services.AddSingleton<PathConfiguration>(provider =>
                 {
-                    var basePath = context.Configuration["BasePath"] ??
+                    var basePath = context.Configuration["BasePath"] ?? 
                                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "osdu-data", "tno");
                     return new PathConfiguration { BaseDataPath = basePath };
                 });
@@ -227,30 +231,30 @@ public class Program
                         // Enable retries and connection pooling for container resilience
                         MaxConnectionsPerServer = 10,
                     });
-
+                    
                 services.AddHttpClient(); // For general HTTP operations
-
+                
                 // Application
                 services.AddScoped<DataLoadApplication>();
             })
             .ConfigureLogging((context, logging) =>
             {
                 logging.ClearProviders();
-
+                
                 // Container-friendly logging
                 logging.AddSimpleConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
                 });
-
+                
                 // Add structured logging for container environments
                 logging.AddJsonConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
                 });
-
+                
                 if (context.HostingEnvironment.IsDevelopment())
                 {
                     logging.AddDebug();
@@ -261,7 +265,7 @@ public class Program
                     // Production/container environment
                     logging.SetMinimumLevel(LogLevel.Information);
                 }
-
+                
                 // Always log critical errors regardless of environment
                 logging.AddFilter("OSDU.DataLoad", LogLevel.Information);
                 logging.AddFilter("Microsoft", LogLevel.Warning);

@@ -43,25 +43,50 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
             var datasetDirectories = DatasetConfiguration.GetDatasetDirectories().ToList();
             _logger.LogInformation("Processing {DatasetCount} configured dataset directories", datasetDirectories.Count);
 
-            var overallSuccessfulUploads = 0;
-            var overallFailedUploads = 0;
-            var overallProcessedFiles = 0;
+            // First pass: Discover all files to get total count
+            var allDatasetFiles = new Dictionary<string, List<SourceFile>>();
+            var totalFileCount = 0;
+
+            _logger.LogInformation("Discovering files across all dataset directories...");
+            
+            foreach (var datasetDirectory in datasetDirectories)
+            {
+                var fullDirectoryPath = Path.Combine(request.BasePath, datasetDirectory);
+                
+                if (Directory.Exists(fullDirectoryPath))
+                {
+                    var files = DiscoverFilesInDirectory(fullDirectoryPath, datasetDirectory);
+                    allDatasetFiles[datasetDirectory] = files;
+                    totalFileCount += files.Count;
+                    
+                    _logger.LogInformation("Dataset {DatasetDirectory}: {FileCount} files", 
+                        datasetDirectory, files.Count);
+                }
+                else
+                {
+                    allDatasetFiles[datasetDirectory] = new List<SourceFile>();
+                    _logger.LogWarning("Dataset directory does not exist: {DirectoryPath}", fullDirectoryPath);
+                }
+            }
+
+            _logger.LogInformation("Total files discovered across all datasets: {TotalFileCount}", totalFileCount);
+
+            // Initialize overall progress tracking
+            var overallProgressTracker = new OverallProgressTracker();
             var failedDatasets = new List<string>();
 
-            // Process each dataset directory
+            // Process each dataset directory with overall progress tracking
             foreach (var datasetDirectory in datasetDirectories)
             {
                 _logger.LogInformation("Processing dataset directory: {DatasetDirectory}", datasetDirectory);
 
                 var datasetResult = await ProcessDatasetDirectoryAsync(
-                    datasetDirectory, 
-                    request.BasePath,
-                    request.OutputPath, 
+                    datasetDirectory,
+                    allDatasetFiles[datasetDirectory],
+                    request.OutputPath,
+                    totalFileCount,
+                    overallProgressTracker,
                     cancellationToken);
-
-                overallSuccessfulUploads += datasetResult.SuccessfulUploads;
-                overallFailedUploads += datasetResult.FailedUploads;
-                overallProcessedFiles += datasetResult.ProcessedFiles;
 
                 if (!datasetResult.IsSuccess)
                 {
@@ -73,20 +98,20 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
             }
 
             var duration = DateTime.UtcNow - startTime;
-            var isOverallSuccess = overallFailedUploads == 0;
+            var isOverallSuccess = overallProgressTracker.FailedUploads == 0;
 
             _logger.LogInformation("Dataset upload completed - Total: {Total}, Successful: {Successful}, Failed: {Failed}, Duration: {Duration:mm\\:ss}",
-                overallProcessedFiles, overallSuccessfulUploads, overallFailedUploads, duration);
+                totalFileCount, overallProgressTracker.SuccessfulUploads, overallProgressTracker.FailedUploads, duration);
 
             return new LoadResult
             {
                 IsSuccess = isOverallSuccess,
                 Message = isOverallSuccess 
-                    ? $"Successfully uploaded all {overallSuccessfulUploads} files across {datasetDirectories.Count} dataset directories"
-                    : $"Uploaded {overallSuccessfulUploads} of {overallProcessedFiles} files. Failed datasets: {string.Join(", ", failedDatasets)}",
-                ProcessedRecords = overallProcessedFiles,
-                SuccessfulRecords = overallSuccessfulUploads,
-                FailedRecords = overallFailedUploads,
+                    ? $"Successfully uploaded all {overallProgressTracker.SuccessfulUploads} files across {datasetDirectories.Count} dataset directories"
+                    : $"Uploaded {overallProgressTracker.SuccessfulUploads} of {totalFileCount} files. Failed datasets: {string.Join(", ", failedDatasets)}",
+                ProcessedRecords = totalFileCount,
+                SuccessfulRecords = overallProgressTracker.SuccessfulUploads,
+                FailedRecords = overallProgressTracker.FailedUploads,
                 Duration = duration,
                 ErrorDetails = failedDatasets.Any() 
                     ? $"Failed dataset directories: {string.Join(", ", failedDatasets)}"
@@ -112,14 +137,16 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
     /// </summary>
     private async Task<DatasetUploadResult> ProcessDatasetDirectoryAsync(
         string datasetDirectory,
-        string basePath,
-        string outputPath, 
+        List<SourceFile> files,
+        string outputPath,
+        int totalFilesAcrossAllDatasets,
+        OverallProgressTracker overallProgressTracker,
         CancellationToken cancellationToken)
     {
         var datasetStartTime = DateTime.UtcNow;
-        var successfulUploads = 0;
-        var failedUploads = 0;
-        var processedFiles = 0;
+        var datasetSuccessfulUploads = 0;
+        var datasetFailedUploads = 0;
+        var datasetProcessedFiles = 0;
         var fileLocationMappings = new ConcurrentDictionary<string, object>();
         var failedFiles = new ConcurrentBag<string>();
 
@@ -127,27 +154,6 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
 
         try
         {
-            // Build full directory path
-            var fullDirectoryPath = Path.Combine(basePath, datasetDirectory);
-            
-            if (!Directory.Exists(fullDirectoryPath))
-            {
-                _logger.LogWarning("Dataset directory does not exist: {DirectoryPath}", fullDirectoryPath);
-                return new DatasetUploadResult
-                {
-                    IsSuccess = true, // Empty directory is not a failure
-                    DatasetType = datasetDirectory,
-                    ProcessedFiles = 0,
-                    SuccessfulUploads = 0,
-                    FailedUploads = 0,
-                    Duration = DateTime.UtcNow - datasetStartTime,
-                    FailedFiles = new List<string>()
-                };
-            }
-
-            // Discover files in the directory
-            var files = DiscoverFilesInDirectory(fullDirectoryPath, datasetDirectory);
-            
             if (!files.Any())
             {
                 _logger.LogInformation("No files found in dataset directory: {DatasetDirectory}", datasetDirectory);
@@ -163,19 +169,21 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
                 };
             }
 
-            _logger.LogInformation("Found {FileCount} files in dataset directory: {DatasetDirectory}", files.Count, datasetDirectory);
-
+            _logger.LogInformation("Processing {FileCount} files in dataset directory: {DatasetDirectory}", files.Count, datasetDirectory);
 
             var options = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Environment.ProcessorCount * 8,
+                MaxDegreeOfParallelism = Environment.ProcessorCount * 16,
                 CancellationToken = cancellationToken
             };
 
             await Parallel.ForEachAsync(files, options, async (file, ct) =>
             {
-                var current = Interlocked.Increment(ref processedFiles);
-                var progress = (double)current / files.Count * 100;
+                var datasetCurrent = Interlocked.Increment(ref datasetProcessedFiles);
+                var overallCurrent = overallProgressTracker.IncrementProcessed();
+                
+                var datasetProgress = (double)datasetCurrent / files.Count * 100;
+                var overallProgress = (double)overallCurrent / totalFilesAcrossAllDatasets * 100;
 
                 try
                 {
@@ -183,7 +191,9 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
 
                     if (result.IsSuccess)
                     {
-                        Interlocked.Increment(ref successfulUploads);
+                        Interlocked.Increment(ref datasetSuccessfulUploads);
+                        overallProgressTracker.IncrementSuccessful();
+                        
                         fileLocationMappings[file.FileName] = new
                         {
                             FileId = result.FileId,
@@ -193,31 +203,35 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
                             UploadedAt = DateTime.UtcNow
                         };
 
-                        _logger.LogInformation("✓ Progress Tracking - Dataset: [{DatasetDirectory}] - [{Current}/{Total}] ({Progress:F1}%) Uploaded: {FileName} -> {FileId}:{Version} | Success: {Success} | Failures: {Failures}",
-                            datasetDirectory, current, files.Count, progress, file.FileName, result.FileId, result.FileRecordVersion,
-                            successfulUploads, failedUploads);
+                        _logger.LogInformation("✓ Overall Progress: [{OverallCurrent}/{OverallTotal}] ({OverallProgress:F1}%) | Dataset [{DatasetDirectory}]: [{DatasetCurrent}/{DatasetTotal}] ({DatasetProgress:F1}%) | Uploaded: {FileName} -> {FileId}:{Version}",
+                            overallCurrent, totalFilesAcrossAllDatasets, overallProgress,
+                            datasetDirectory, datasetCurrent, files.Count, datasetProgress,
+                            file.FileName, result.FileId, result.FileRecordVersion);
                     }
                     else
                     {
-                        Interlocked.Increment(ref failedUploads);
+                        Interlocked.Increment(ref datasetFailedUploads);
+                        overallProgressTracker.IncrementFailed();
                         failedFiles.Add(file.FileName);
 
-                        _logger.LogError("✗ Progress Tracking - Dataset: [{DatasetDirectory}] - [{Current}/{Total}] ({Progress:F1}%) Failed to upload: {FileName} - {Error} | Success: {Success} | Failures: {Failures}",
-                            datasetDirectory, current, files.Count, progress, file.FileName, result.Message,
-                            successfulUploads, failedUploads);
+                        _logger.LogError("✗ Overall Progress: [{OverallCurrent}/{OverallTotal}] ({OverallProgress:F1}%) | Dataset [{DatasetDirectory}]: [{DatasetCurrent}/{DatasetTotal}] ({DatasetProgress:F1}%) | Failed: {FileName} - {Error}",
+                            overallCurrent, totalFilesAcrossAllDatasets, overallProgress,
+                            datasetDirectory, datasetCurrent, files.Count, datasetProgress,
+                            file.FileName, result.Message);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Interlocked.Increment(ref failedUploads);
+                    Interlocked.Increment(ref datasetFailedUploads);
+                    overallProgressTracker.IncrementFailed();
                     failedFiles.Add(file.FileName);
 
-                    _logger.LogError(ex, "✗ Progress Tracking - [{Current}/{Total}] ({Progress:F1}%) Exception during upload: {FileName} | Success: {Success} | Failures: {Failures}",
-                        current, files.Count, progress, file.FileName,
-                        successfulUploads, failedUploads);
+                    _logger.LogError(ex, "✗ Overall Progress: [{OverallCurrent}/{OverallTotal}] ({OverallProgress:F1}%) | Dataset [{DatasetDirectory}]: [{DatasetCurrent}/{DatasetTotal}] ({DatasetProgress:F1}%) | Exception: {FileName}",
+                        overallCurrent, totalFilesAcrossAllDatasets, overallProgress,
+                        datasetDirectory, datasetCurrent, files.Count, datasetProgress,
+                        file.FileName);
                 }
             });
-
 
             // Save dataset-specific output file
             if (fileLocationMappings.Any())
@@ -226,18 +240,18 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
             }
 
             var duration = DateTime.UtcNow - datasetStartTime;
-            var isSuccess = failedUploads == 0;
+            var isSuccess = datasetFailedUploads == 0;
 
             _logger.LogInformation("Completed dataset {DatasetDirectory}: {Successful}/{Total} successful, {Failed} failed, Duration: {Duration:mm\\:ss}",
-                datasetDirectory, successfulUploads, files.Count, failedUploads, duration);
+                datasetDirectory, datasetSuccessfulUploads, files.Count, datasetFailedUploads, duration);
 
             return new DatasetUploadResult
             {
                 IsSuccess = isSuccess,
                 DatasetType = datasetDirectory,
-                ProcessedFiles = processedFiles,
-                SuccessfulUploads = successfulUploads,
-                FailedUploads = failedUploads,
+                ProcessedFiles = datasetProcessedFiles,
+                SuccessfulUploads = datasetSuccessfulUploads,
+                FailedUploads = datasetFailedUploads,
                 Duration = duration,
                 FailedFiles = failedFiles.ToList()
             };
@@ -251,8 +265,8 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
             {
                 IsSuccess = false,
                 DatasetType = datasetDirectory,
-                ProcessedFiles = processedFiles,
-                SuccessfulUploads = successfulUploads,
+                ProcessedFiles = datasetProcessedFiles,
+                SuccessfulUploads = datasetSuccessfulUploads,
                 FailedUploads = int.MaxValue, // Unknown total, so mark as failed
                 Duration = duration,
                 FailedFiles = failedFiles.ToList()
@@ -337,6 +351,24 @@ public class UploadFilesCommandHandler : IRequestHandler<UploadFilesCommand, Loa
             _logger.LogError(ex, "Failed to save dataset output file for {DatasetDirectory}", datasetDirectory);
         }
     }
+}
+
+/// <summary>
+/// Thread-safe tracker for overall progress across all datasets
+/// </summary>
+internal class OverallProgressTracker
+{
+    private int _processedFiles = 0;
+    private int _successfulUploads = 0;
+    private int _failedUploads = 0;
+
+    public int ProcessedFiles => _processedFiles;
+    public int SuccessfulUploads => _successfulUploads;
+    public int FailedUploads => _failedUploads;
+
+    public int IncrementProcessed() => Interlocked.Increment(ref _processedFiles);
+    public int IncrementSuccessful() => Interlocked.Increment(ref _successfulUploads);
+    public int IncrementFailed() => Interlocked.Increment(ref _failedUploads);
 }
 
 /// <summary>
