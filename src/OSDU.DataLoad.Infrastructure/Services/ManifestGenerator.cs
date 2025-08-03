@@ -85,7 +85,7 @@ namespace OSDU.DataLoad.Infrastructure.Services
                             templateJson: templateFilePath,
                             outputPath: outputDirectory,
                             dataPartition: dataPartition,
-                            requiredTemplate: mappingConfig.RequiredTemplate != null ? JsonSerializer.Serialize(mappingConfig.RequiredTemplate) : null,
+                            requiredTemplate: mappingConfig.RequiredTemplate,
                             groupFilename: groupFile ? mapping.OutputFileName : null,
                             aclViewer: aclViewer,
                             aclOwner: aclOwner,

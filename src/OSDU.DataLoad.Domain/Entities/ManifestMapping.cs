@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace OSDU.DataLoad.Domain.Entities;
@@ -8,7 +9,11 @@ namespace OSDU.DataLoad.Domain.Entities;
 public class ManifestMappingConfig
 {
     [JsonPropertyName("required_template")]
-    public RequiredTemplate RequiredTemplate { get; set; } = new();
+    public JsonElement? RequiredTemplateElement { get; set; } = null;
+
+    // Helper property to get the JSON as a string, defaulting to null
+    [JsonIgnore]
+    public string? RequiredTemplate => RequiredTemplateElement?.GetRawText();
 
     [JsonPropertyName("mapping")]
     public ManifestMapping[] Mapping { get; set; } = Array.Empty<ManifestMapping>();
@@ -27,18 +32,6 @@ public class ManifestMapping
 
     [JsonPropertyName("output_file_name")]
     public string OutputFileName { get; set; } = string.Empty;
-}
-
-/// <summary>
-/// Represents the required template structure for OSDU records
-/// </summary>
-public class RequiredTemplate
-{
-    [JsonPropertyName("acl")]
-    public AclTemplate Acl { get; set; } = new();
-
-    [JsonPropertyName("legal")]
-    public LegalTemplate Legal { get; set; } = new();
 }
 
 /// <summary>
