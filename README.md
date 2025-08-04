@@ -77,7 +77,7 @@ dotnet build
 
 # Run commands directly
 dotnet run -- help
-dotnet run -- download-tno --destination "~/osdu-data/tno"
+dotnet run -- download --destination "~/osdu-data/tno"
 dotnet run -- load --source "~/osdu-data/tno"
 ```
 ## Available Commands
@@ -107,10 +107,10 @@ Shows available commands, usage examples, and current configuration status.
 ### Download TNO Test Data
 ```bash
 # Download ~2.2GB of official test data (from console project directory)
-dotnet run -- download-tno --destination "~/osdu-data/tno"
+dotnet run -- download --destination "~/osdu-data/tno"
 
 # Overwrite existing data
-dotnet run -- download-tno --destination "~/osdu-data/tno" --overwrite
+dotnet run -- download --destination "~/osdu-data/tno" --overwrite
 ```
 
 ### Load Data
